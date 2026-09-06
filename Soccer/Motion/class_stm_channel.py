@@ -1,6 +1,6 @@
 import Roki
 import time
-from scipy.spatial.transform import Rotation as R
+from Soccer.rotation_math import Rotation as R
 import struct
 import math
 from math import pi

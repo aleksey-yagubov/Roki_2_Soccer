@@ -62,26 +62,30 @@ class Line:
         return (self.x1_, self.y1_, self.x2_, self.y2_)
 
 class Image:
-    def __init__ (self, img_):
-        self.img = img_.copy ()
+    def __init__ (self, img_, copy = True):
+        self.img = img_.copy () if copy else img_
+        self._lab_img = None
+
+    def lab(self):
+        if self._lab_img is None:
+            self._lab_img = cv2.cvtColor(self.img, cv2.COLOR_BGR2LAB)
+        return self._lab_img
 
     def find_blobs (self, ths, roi = None, pixels_threshold = 100, area_threshold = 100, merge=False, margin=0, invert = False):
         #print("find blobs")
         
         blobs = []
         if roi == None:
-            image_roi = self.img
             w = h = 1
+            labimg = self.lab()
         else:
             x, y, w, h = roi
-            image_roi = self.img[y:(y+h), x:(x+w),:]
+            labimg = self.lab()[y:(y+h), x:(x+w), :]
         masks = []
         if(w > 0 and h > 0):
             for th in ths:
                 low_th = (int(th[0] * 2.55), th[2] + 128, th[4] + 128)
                 high_th = (math.ceil(th[1] * 2.55), th[3] + 128, th[5] + 128)
-
-                labimg = cv2.cvtColor (image_roi, cv2.COLOR_BGR2LAB)
 
                 mask = cv2.inRange (labimg, low_th, high_th)
 
@@ -121,22 +125,16 @@ class Image:
 
         return blobs
 
-    def binary (self, th):
+    def binary (self, th, to_three_channels = False):
         #low  = (th [0], th [2], th [4])
         #high = (th [1], th [3], th [5])
         low = (int(th[0] * 2.55), th[2] + 128, th[4] + 128)
         high = (math.ceil(th[1] * 2.55), th[3] + 128, th[5] + 128)
-        labimg = cv2.cvtColor (self.img, cv2.COLOR_BGR2LAB)
+        labimg = self.lab()
         mask = cv2.inRange(labimg, low, high)
-
-        sh = mask.shape
-
-        result = np.zeros((sh[0], sh[1], 3), dtype=np.uint8)
-
-        for i in range(0, 3):
-            result[:, :, i] = mask.copy()
-
-        return result
+        if to_three_channels:
+            return cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+        return mask
 
     def find_line_segments (self):
         # - Почему Колумб приплыл в Америку, а не в Индию?
@@ -170,7 +168,10 @@ class Image:
         # - Почему Колумб приплыл в Америку, а не в Индию?
         # - Потому что он плавал по одометрии
 
-        gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+        if len(self.img.shape) == 2:
+            gray = self.img
+        else:
+            gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 50, 150, apertureSize=3)
 
         #cv2.imshow ("a", edges)
@@ -224,7 +225,7 @@ class Sensor:
         self.img = cv2.imread (self.filename)
 
     def snapshot (self):
-        return Image (self.img.copy ())
+        return Image (self.img)
 
 def main ():
     sensor = Sensor ("rgb_basket.jpg")

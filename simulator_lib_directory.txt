@@ -1,1 +1,0 @@
-C:\Program Files\CoppeliaRobotics\CoppeliaSimEdu\programming\legacyRemoteApi\remoteApiBindings\python\python\

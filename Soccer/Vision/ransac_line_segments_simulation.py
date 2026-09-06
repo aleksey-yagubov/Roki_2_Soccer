@@ -15,13 +15,9 @@ import sys, os
 
 current_work_directory = os.getcwd()
 current_work_directory = current_work_directory.replace('\\', '/')
-if sys.version != '3.4.0': 
-    current_work_directory += '/'
-    import numpy as np
-    from random import random
-else:
-    import pyb, sensor
-    import ulab as np
+current_work_directory += '/'
+import numpy as np
+from random import random
 
 
 import math
@@ -29,9 +25,6 @@ import math
 
 
 def ransac_calc(data1, deviation, number_of_iterations, data_size,  horizontal_resolution, vertical_resolution):
-    #def random():
-    #    #getting a random number from 0 to 1
-    #    return pyb.rng()/1073741824
     best_score = 0
     best_sample_1 = 0
     best_sample_2 = 0
@@ -130,28 +123,39 @@ def ransac_calc(data1, deviation, number_of_iterations, data_size,  horizontal_r
 def build_line_segments( img, rank_threshold = 30, line_num_limit = 5, upper_lines = False, horizontal_resolution =160, vertical_resolution =120):
     deviation = 2
     number_of_iterations = 10
+    img_is_gray = len(img.shape) == 2
     if upper_lines:
         data_size = horizontal_resolution
-        #data = sensor.alloc_extra_fb(1, 1, 320)
         data = np.zeros((horizontal_resolution * 2), dtype = np.uint16)
         for x in range(horizontal_resolution):
             for y in range(vertical_resolution):
-                int = img[y][x].any()
-                if int : break
+                if img_is_gray:
+                    pixel_is_set = img[y][x] != 0
+                else:
+                    pixel_is_set = img[y][x].any()
+                if pixel_is_set : break
             data[2 * x] = x
             data[2 * x + 1] = y
     else:
         data_size = 0
-        for i in range(horizontal_resolution * vertical_resolution):
-            if img[int(i/horizontal_resolution)][int(i%horizontal_resolution)].any != 0:
-                data_size += img[i]
+        for x in range(horizontal_resolution):
+            for y in range(vertical_resolution):
+                if img_is_gray:
+                    pixel_is_set = img[y][x] != 0
+                else:
+                    pixel_is_set = (img[y][x] != [0,0,0]).any()
+                if pixel_is_set:
+                    data_size += 1
         if data_size < 4: return []
-        #data = sensor.alloc_extra_fb(1, 1, data_size*2)
-        data = data = np.zeros((1,data_size*2), dtype = np.uint16)
+        data = np.zeros((data_size * 2), dtype = np.uint16)
         data_size = 0
         for x in range(horizontal_resolution):
             for y in range(vertical_resolution):
-                if img[y][x] != [0,0,0]:
+                if img_is_gray:
+                    pixel_is_set = img[y][x] != 0
+                else:
+                    pixel_is_set = (img[y][x] != [0,0,0]).any()
+                if pixel_is_set:
                     data[2 * data_size] = x
                     data[2 * data_size + 1] = y
                     data_size += 1
@@ -164,5 +168,4 @@ def build_line_segments( img, rank_threshold = 30, line_num_limit = 5, upper_lin
         line_segments_data.append(new_segment)
         rest_number -= inlier_rank
         if rest_number < 2 : break
-    #sensor.dealloc_extra_fb()
     return line_segments_data

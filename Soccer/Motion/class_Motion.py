@@ -3,17 +3,15 @@
 
 import sys, os
 import math, time, json
-from tkinter import FALSE
 import numpy as np
 import starkit
 from math import pi
-from roki2met import roki2met
-from scipy.spatial.transform import Rotation
+from Robots.roki2met import roki2met
+from Soccer.rotation_math import Rotation
 from Robots.class_Robot_Roki_2 import Robot
 from Soccer.Motion.class_Motion_extention_1 import Motion_extention_1
+from Soccer.config_paths import init_param_read_path
 
-#from ball_Approach_Steps_Seq import *
-#from compute_Alpha_v3 import Alpha
 from Soccer.Motion.path_planning import PathPlan
 
 def uprint(*text):
@@ -55,7 +53,6 @@ class Motion(Robot, Motion_extention_1):
         self.rotation = 0           # -45 - +45 degrees Centigrade per step + CW, - CCW.
         self.first_Leg_Is_Right_Leg = True
         self.initPoses = 400//self.simThreadCycleInMs
-        #self.al = Alpha()
         self.exitFlag = 0
         self.falling_Flag = 0
         self.neck_pan = 0
@@ -98,7 +95,6 @@ class Motion(Robot, Motion_extention_1):
         self.keep_hands_up = False
         self.kick_power = 100       # from 0 to 100
         self.motion_slot_progress = False
-        self.Vision_Sensor_Display_On = self.glob.params['Vision_Sensor_Display_On']
         #self.start_point_for_imu_drift = 0
         self.motions_recorded = []
         if self.glob.SIMULATION == 5 :
@@ -106,7 +102,7 @@ class Motion(Robot, Motion_extention_1):
             self.Roki = self.glob.Roki
             self.stm_channel = self.glob.stm_channel
             self.rcb = self.glob.rcb
-            with open("/home/pi/Desktop/" + "Init_params/Real/Real_calibr.json", "r") as f:
+            with open(init_param_read_path(self.glob.current_work_directory, "Real/Real_calibr.json"), "r") as f:
                 data1 = json.loads(f.read())
             self.neck_calibr = data1['neck_calibr']
             self.neck_play_pose = data1['neck_play_pose']
@@ -117,8 +113,7 @@ class Motion(Robot, Motion_extention_1):
 
     #-------------------------------------------------------------------------------------------------------------------------------
     def pause_in_ms(self, time_in_ms):
-        if self.glob.SIMULATION == 2: self.pyb.delay(time_in_ms)
-        elif self.glob.SIMULATION == 5:
+        if self.glob.SIMULATION == 5:
             time.sleep(time_in_ms / 1000)
         else: self.sim_Progress(time_in_ms/1000)
 
@@ -190,16 +185,9 @@ class Motion(Robot, Motion_extention_1):
         #    if (self.pin2.value()== 0):   # нажатие на кнопку 2 на голове
         #        ala = 1
         #        uprint("нажато")
-        #self.pyb.delay(1000)
 
     def play_Motion_Slot(self, name = ''):
-        if self.glob.SIMULATION == 2:
-            for key in self.MOTION_SLOT_DICT:
-                if self.MOTION_SLOT_DICT[key][0] == name:
-                    self.rcb.motionPlay(key)
-                    self.pyb.delay(self.MOTION_SLOT_DICT[key][1])
-        else:
-            self.simulateMotion(name = name)
+        self.simulateMotion(name = name)
 
     def fill_queue_with_frames(self, frames):
         servoData =  self.Roki.Rcb4.ServoData()
@@ -263,8 +251,6 @@ class Motion(Robot, Motion_extention_1):
             # while True:
             #     if self.stm_channel.mb.GetBodyQueueInfo()[1].Size < 1: break
             #     time.sleep(0.02)
-                #self.pyb.delay(30 * frames_number)
-                #self.pyb.delay(250 )
         else:
             self.simulateMotion(name = name, motion_list = motion_list, hands_on = hands_on)
         self.motion_slot_progress = False
@@ -304,15 +290,15 @@ class Motion(Robot, Motion_extention_1):
                             servoData.Id, servoData.Sio, servoData.Data = self.ACTIVESERVOS[i][0], self.ACTIVESERVOS[i][1], pos
                             servoDatas.append(servoData)
                             #print(i, servoDatas[i].Id, servoDatas[i].Sio, servoDatas[i].Data, file=log_file)
-                    frames_number = int(motion[0]) 
-                    a=self.rcb.setServoPosAsync(servoDatas, frames_number * soft_factor, frames_number-1)
-                    time.sleep(self.glob.params['FRAME_DELAY']/1000 * (frames_number-1))
+                    frames_number = int(motion[0])
+                    frames = int(round(frames_number * soft_factor))
+                    pause = int(frames_number - 1)
+                    a=self.rcb.setServoPosAsync(servoDatas, frames, pause)
+                    time.sleep(self.glob.params['FRAME_DELAY']/1000 * pause)
             self.wait_for_gueue_end(with_Vision = False)
             # while True:
             #     if self.stm_channel.mb.GetBodyQueueInfo()[1].Size < 1: break
             #     time.sleep(0.02)
-                #self.pyb.delay(30 * frames_number)
-                #self.pyb.delay(250 )
         else:
             self.simulateMotion(name = name, motion_list = motion_list, hands_on = hands_on)
         self.motion_slot_progress = False
@@ -366,6 +352,8 @@ class Motion(Robot, Motion_extention_1):
                 self.falling_Flag = 2                   # on left side
                 self.simulateMotion(name = 'Get_Up_Left')
         if self.glob.SIMULATION == 5:
+            if abs(self.body_euler_angle['pitch']) <= 1 and abs(self.body_euler_angle['roll']) <= 1:
+                self.falling_Flag = 0
             if self.body_euler_angle['pitch'] > 1:                  # on stomach
                 self.falling_Flag = 1                               # on stomach
                 self.stm_channel.mb.ResetBodyQueue()                    # cleans queue of commands to controller
@@ -387,12 +375,8 @@ class Motion(Robot, Motion_extention_1):
         angles =[]
         anglesR=[]
         anglesL=[]
-        #if self.glob.SIMULATION == 2:
         anglesR = starkit.alpha_calculation(self.xtr,self.ytr,self.ztr,self.xr,self.yr,self.zr,self.wr, self.SIZES, self.LIMALPHA)
         anglesL = starkit.alpha_calculation(self.xtl,-self.ytl,self.ztl,self.xl,-self.yl,self.zl,self.wl, self.SIZES, self.LIMALPHA)
-        #else:
-        #    anglesR = self.al.compute_Alpha_v3(self.xtr,self.ytr,self.ztr,self.xr,self.yr,self.zr,self.wr, self.SIZES, self.LIMALPHA)
-        #    anglesL = self.al.compute_Alpha_v3(self.xtl,-self.ytl,self.ztl,self.xl,-self.yl,self.zl,self.wl, self.SIZES, self.LIMALPHA)
         if len(anglesR)>1:
             for i in range(len(anglesR)):
                 if len(anglesR)==1: break
@@ -479,7 +463,7 @@ class Motion(Robot, Motion_extention_1):
         self.direction_To_Attack = self.norm_yaw(self.direction_To_Attack)
         self.glob.imu_drift_last_correction_time = time.perf_counter()
 
-    def walk_Initial_Pose(self, amplitude = 24):
+    def walk_Initial_Pose(self, amplitude = 24, start_mixing = True):
         self.robot_In_0_Pose = False
         if not self.falling_Test() == 0:
             #self.local.quality =0
@@ -488,7 +472,7 @@ class Motion(Robot, Motion_extention_1):
             return[]
         self.xtr = self.xtl = 0
         framestep = self.simThreadCycleInMs//10
-        if self.glob.SIMULATION == 5:
+        if self.glob.SIMULATION == 5 and start_mixing:
             self.rcb.motionPlay(3)
             self.wait_for_gueue_end(with_Vision = False)
             # while True:
@@ -1592,12 +1576,10 @@ class Motion(Robot, Motion_extention_1):
                             servoData = self.Roki.Rcb4.ServoData()
                             servoData.Id, servoData.Sio, servoData.Data = self.ACTIVESERVOS[i][0], self.ACTIVESERVOS[i][1], pos
                             servoDatas.append(servoData)
-                    #start2 = self.pyb.millis()
                     a=self.rcb.setServoPosAsync(servoDatas, self.frames_per_cycle, 0)
                     #uprint(servoDatas)
                     #uprint(clock.avg())
                     time1 = time.perf_counter() -start1
-                    #time2 = self.pyb.elapsed_millis(start2)
                     #time.sleep(self.frame_delay/1000 - time1)
         #self.robot_In_0_Pose = True
         if respect_body_tilt: 
@@ -1717,7 +1699,6 @@ class Motion(Robot, Motion_extention_1):
             #     if self.stm_channel.mb.GetBodyQueueInfo()[1].Size < 3: break
             #     time.sleep(0.02)
         for iii in range(0,frameNumberPerCycle,framestep):
-            if self.glob.SIMULATION == 2: start1 = self.pyb.millis()
             if 0<= iii <self.fr1 :
                 alpha = alpha01 * (iii/2+fase_offset*framestep)
                 S = (self.amplitude/2 )*math.cos(alpha)
@@ -1819,12 +1800,8 @@ class Motion(Robot, Motion_extention_1):
                         for i in range(joint_number):
                             pos = int(angles[i]*1698 * self.ACTIVESERVOS[i][2] + 7500)
                             servoDatas[i].Id, servoDatas[i].Sio, servoDatas[i].Data = self.ACTIVESERVOS[i][0], self.ACTIVESERVOS[i][1], pos
-                    #start2 = self.pyb.millis()
                     a=self.rcb.setServoPosAsync(servoDatas,self.frames_per_cycle, 0)
                     #uprint(disp)
-                    #time2 = self.pyb.elapsed_millis(start2)
-                    # time1 = self.pyb.elapsed_millis(start1)
-                    # self.pyb.delay(self.frame_delay - time1)
                 #self.refresh_Orientation()
         # returning xr, xl, yr, yl to initial value
         self.xr, self.xl, self.yr, self.yl = xr_old, xl_old, yr_old, yl_old
@@ -1949,5 +1926,3 @@ class Motion(Robot, Motion_extention_1):
 
 if __name__=="__main__":
     print('This is not main module!')
-
-

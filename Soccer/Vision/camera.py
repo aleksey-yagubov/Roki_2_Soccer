@@ -9,6 +9,7 @@ class Camera:
         self.picam2 = None
         self.last_frame_number = 0   
         self.last_frame_time = 0    # frame timestamp in us
+        # Legacy name; this is now the single main stream size.
         self.camera_lores = (800, 650)
  
     class Frame_number_counter:
@@ -37,8 +38,12 @@ class Camera:
         self.frame_number_counter = self.Frame_number_counter()
         self.frame_number_counter.target_frame_duration = frame_duration_us
         self.picam2.pre_callback = self.frame_number_counter.add_farme_number
-        #self.picam2.configure(self.picam2.create_still_configuration(main={"format": 'RGB888', "size": (1600, 1300)}, lores={"format": 'YUV420', "size": (800, 650)}))
-        self.picam2.configure(self.picam2.create_preview_configuration(main={"format": 'RGB888', "size": (1600, 1300)}, lores={"format": 'YUV420', "size": self.camera_lores}))
+        config = self.picam2.create_video_configuration(
+            # В Picamera2/libcamera RGB888 в Python приходит как BGR-массив, удобный для OpenCV.
+            main={"format": "RGB888", "size": self.camera_lores},
+            display=None,
+        )
+        self.picam2.configure(config)
         #if neural:
         #    self.picam2.set_controls({"AeExposureMode":  controls.AeExposureModeEnum.Short})
         #else:
@@ -87,10 +92,8 @@ class Camera:
         self.last_frame_number = frame_number
         self.last_frame_time = frame_timestamp / 1000
         #print('frame_number: ', frame_number )
-        image = request.make_array("lores")  # image from the "main" stream
+        image = request.make_array("main")
         request.release()
-        image = cv2.cvtColor(image, cv2.COLOR_YUV2BGR_I420)
-        #image = cv2.cvtColor(image, cv2.COLOR_YUV420p2RGB)
         width, height = self.camera_lores
         image = image[0:height,0:width,0:3]
         #cv2.imshow("Camera", image)
@@ -180,5 +183,3 @@ if __name__ == '__main__':
 #         print('single_quat_timestamps:', timestamp)
 #     for timestamp in camera_frame_timestamps:
 #         print('camera_frame_timestamps:', timestamp)
-        
-    

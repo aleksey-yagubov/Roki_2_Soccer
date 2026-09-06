@@ -8,11 +8,12 @@ import threading
 import random
 #from Soccer.Motion.class_stm_channel import STM_channel
 #from Soccer.Vision.class_Vision_RPI import Vision_RPI
-from multiprocessing import Process, Value
-from roki2met import roki2met
+from multiprocessing import Value
+from Robots.roki2met import roki2met
 import datetime
 import numpy as np
 from ctypes import c_bool
+from Soccer.config_paths import init_param_read_path, init_param_write_path
 #from Soccer.Motion.Soccer_monitor import launcher
 #from Soccer.Localisation.class_Glob import monitor
 import datetime
@@ -55,7 +56,6 @@ class GoalKeeper:
 
     def goto_Center(self):                      #Function for reterning to center position
         print('Function for reterning to center position')
-        #if self.local.coordinate_trust_estimation() < 0.5: self.motion.localisation_Motion()
         player_X_m = self.local.coord_odometry[0]
         player_Y_m = self.local.coord_odometry[1]
         duty_position_x = - self.glob.landmarks['FIELD_LENGTH']/2 + 0.4
@@ -192,6 +192,9 @@ class Forward_Vector_Matrix:
         if row >= self.glob.ROWS : row = self.glob.ROWS -1
         self.direction_To_Guest = self.glob.strategy_data[(col * self.glob.ROWS + row) * 2 + 1] / 40
         self.kick_Power = self.glob.strategy_data[(col * self.glob.ROWS + row) * 2]
+        self.glob.direction_to_guest = self.direction_To_Guest
+        self.glob.kick_power_planned = self.kick_Power
+        self.glob.strategy_cell = [row, col]
         #print('direction_To_Guest = ', math.degrees(self.direction_To_Guest))
         return row, col
 
@@ -356,9 +359,11 @@ class Player():
         self.motion.refresh_Orientation()
         third_yaw_measurement = self.motion.imu_body_yaw()
         if self.motion.glob.SIMULATION == 5:
-            filename = "/home/pi/Desktop/" + "Init_params/Real/Real_params.json"
+            filename = init_param_read_path(self.glob.current_work_directory, "Real/Real_params.json")
+            write_filename = init_param_write_path(self.glob.current_work_directory, "Real/Real_params.json")
         else:
-            filename = self.glob.current_work_directory + "Init_params/Sim/" + "Sim_params.json"
+            filename = init_param_read_path(self.glob.current_work_directory, "Sim/Sim_params.json")
+            write_filename = init_param_write_path(self.glob.current_work_directory, "Sim/Sim_params.json")
         with open(filename, "r") as f:
             params = json.loads(f.read())
             rotation_yield_right = abs(second_yaw_measurement - first_yaw_measurement) / 10
@@ -389,7 +394,7 @@ class Player():
                     + ',\n"KICK_OFFSET_OF_BALL": ' + str(params["KICK_OFFSET_OF_BALL"]) \
                     + ',\n"IMU_DRIFT_IN_DEGREES_DURING_6_MIN_MEASUREMENT": ' + str(params["IMU_DRIFT_IN_DEGREES_DURING_6_MIN_MEASUREMENT"]) \
                     + '\n}'
-        with open(filename, "w") as f:
+        with open(write_filename, "w") as f:
             f.write(jsonstring)
             #json.dump(params_new, f)
         self.motion.turn_To_Course(math.pi/3*2)
@@ -1448,15 +1453,12 @@ class Player():
             distance = Value('d', 0)
             id = self.glob.params["SPRINT_ARUCO_ID"]
 
-            # Process for Vision Pipeline
-            cam_proc = Process(target=lookARUCO.camera_process, args=(size, side_shift,aruco_angle_horizontal, distance, stopFlag, id), daemon = True)
-            # start Process of Vision Pipeline
-            cam_proc.start()
-            #cam_proc.join()
-            pid = cam_proc.pid
-            with open('/dev/shm/process.txt', 'w') as process_file:
-                print(str(pid), file= process_file)
-            process_file.close()
+            camera_thread = threading.Thread(
+                target=lookARUCO.track_from_vision,
+                args=(self.glob.vision, size, side_shift, aruco_angle_horizontal, distance, stopFlag, id),
+                daemon=True,
+            )
+            camera_thread.start()
             self.motion.direction_To_Attack = 0
             self.motion.activation()
             self.motion.head_Return(0, -1000)
@@ -1606,15 +1608,14 @@ class Player():
             #cy = Value('i', 0)
             aruco_angle_horizontal = Value('d', 0)
 
-            # Process for Vision Pipeline
-            cam_proc = Process(target=lookARUCO.camera_process, args=(size, side_shift,aruco_angle_horizontal, stopFlag), daemon = True)
-            # start Process of Vision Pipeline
-            cam_proc.start()
-            #cam_proc.join()
-            pid = cam_proc.pid
-            with open('/dev/shm/process.txt', 'w') as process_file:
-                print(str(pid), file= process_file)
-            process_file.close()
+            distance = Value('d', 0)
+            id = self.glob.params["SPRINT_ARUCO_ID"]
+            camera_thread = threading.Thread(
+                target=lookARUCO.track_from_vision,
+                args=(self.glob.vision, size, side_shift, aruco_angle_horizontal, distance, stopFlag, id),
+                daemon=True,
+            )
+            camera_thread.start()
 
             var = roki2met.roki2met.sprint_v4
             intercom = self.glob.stm_channel.zubr       # used for communication between head and zubr-controller with memIGet/memISet commands
@@ -1957,10 +1958,13 @@ class Player():
             turn_shift = Value('i', 0)       #  0 - no order, 1 - straight forward, 2 - to left, 3- to right, 4 - reverse back
                                              #  0X - no shift, 2X - shift to left, 3X - shift to right
 
-            # Process for Vision Pipeline
-            cam_proc = Process(target=lookAtLine.camera_process, args=(turn_shift), daemon = True)
-            # start Process of Vision Pipeline
-            cam_proc.start()
+            stopFlag = Value(c_bool, False)
+            camera_thread = threading.Thread(
+                target=lookAtLine.track_order_from_vision,
+                args=(self.glob.vision, turn_shift, stopFlag),
+                daemon=True,
+            )
+            camera_thread.start()
 
             var = roki2met.roki2met.marathon
             intercom = self.glob.stm_channel.zubr       # used for communication between head and zubr-controller with memIGet/memISet commands
@@ -2006,13 +2010,6 @@ class Player():
                                             #  0X - no shift, 2X - shift to left, 3X - shift to right
         direction_from_vision = Value('d', 0)
 
-        """
-        stop_flag = Value('i', 0)
-        # Process for Vision Pipeline
-        cam_proc = Process(target= self.glob.vision.detect_Line_Follow_Stream, args=(turn_shift, stop_flag), daemon = True)
-        # start Process of Vision Pipeline
-        cam_proc.start()
-        """
         while True:
             event = threading.Event()
             camera_thread = threading.Thread(target = self.glob.vision.detect_Line_Follow_Stream, args=(event, turn_shift, direction_from_vision))

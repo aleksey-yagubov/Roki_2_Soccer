@@ -1,8 +1,5 @@
-from picamera2 import Picamera2
-from libcamera import controls
 import cv2
 import time
-import numpy as np
 from Soccer.Vision.led_blink import Led
 
 def detect_aruco_markers(frame, led):
@@ -31,54 +28,97 @@ def detect_aruco_markers(frame, led):
         size = side_shift = 0
     return frame , size, side_shift
 
-def camera_process(size, side_shift, stopFlag):
-    picam2 = Picamera2(camera_num=0)
-    led = Led()
-    picam2.configure(picam2.create_preview_configuration(main={"format": 'RGB888', "size": (1600, 1300)}, lores={"format": 'YUV420', "size": (800, 650)})) 
-    picam2.set_controls({"AeExposureMode":  controls.AeExposureModeEnum.Short})
-    picam2.start()
+def track_from_vision(vision, size, side_shift, stopFlag):
+    led = getattr(vision, "led", None) or Led()
     count = 0
     start_time = time.perf_counter()
-    while not stopFlag:
-        request = picam2.capture_request()
-        im = request.make_array("lores")  
-        request.release()
-        im = cv2.cvtColor(im, cv2.COLOR_YUV420p2GRAY)
-        im, size.value, side_shift.value = detect_aruco_markers(im, led)     # Обнаружение аруко маркеров
-        cv2.imshow("Camera", im)
-        cv2.waitKey(10)
+    while not stopFlag.value:
+        frame, frame_number = vision.camera.snapshot()
+        if frame_number == 0:
+            continue
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        image, size.value, side_shift.value = detect_aruco_markers(gray, led)
+        vision.display_camera_image(image, "Line")
         count += 1
         if count == 100:
             count = 0
             time_elapsed = time.perf_counter() - start_time
             print('Rate : ', int(100 / time_elapsed), ' FPS')
             start_time = time.perf_counter()
-        if size.value > 180 : 
-            stopFlag = True
+        if size.value > 180:
+            stopFlag.value = True
             break
-    cv2.destroyAllWindows()
 
-if __name__== "__main__":
-    from multiprocessing import Value, Process
-    from led_blink import Led
-    size = Value('i', 0)
-    side_shift = Value('i', 0)
-    stopFlag = False
-    # Process for Vision Pipeline
-    cam_proc = Process(target= camera_process, args=(size, side_shift, stopFlag), daemon = True)
-    # start Process of Vision Pipeline
-    cam_proc.start()
-    while not stopFlag:
-        aruco_size = size.value
-        aruco_shift = side_shift.value
-        if aruco_size > 90:
-            print('Reverse')
-            stopFlag = True
+def track_order_from_vision(vision, turn_shift, stopFlag):
+    size = 0
+    side_shift = 0
+    led = getattr(vision, "led", None) or Led()
+    count = 0
+    start_time = time.perf_counter()
+    while not stopFlag.value:
+        frame, frame_number = vision.camera.snapshot()
+        if frame_number == 0:
+            continue
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        image, size, side_shift = detect_aruco_markers(gray, led)
+        vision.display_camera_image(image, "Line")
+        if size > 90:
+            turn_shift.value = 4
+        elif side_shift > 0:
+            turn_shift.value = 2
+        elif side_shift < 0:
+            turn_shift.value = 3
         else:
-            if aruco_shift > 0:
+            turn_shift.value = 1
+        count += 1
+        if count == 100:
+            count = 0
+            time_elapsed = time.perf_counter() - start_time
+            print('Rate : ', int(100 / time_elapsed), ' FPS')
+            start_time = time.perf_counter()
+
+def standalone_camera_loop():
+    from picamera2 import Picamera2
+    from libcamera import controls
+
+    led = Led()
+    picam2 = Picamera2(camera_num=0)
+    picam2.configure(picam2.create_video_configuration(
+        main={"format": "RGB888", "size": (800, 650)},
+        display=None,
+    ))
+    picam2.set_controls({"AeExposureMode": controls.AeExposureModeEnum.Short})
+    picam2.start()
+    count = 0
+    start_time = time.perf_counter()
+    try:
+        while True:
+            request = picam2.capture_request()
+            image = request.make_array("main")
+            request.release()
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            image, size, side_shift = detect_aruco_markers(image, led)
+            cv2.imshow("Line", image)
+            key = cv2.waitKey(10) & 0xFF
+            if key == ord('q'):
+                break
+            count += 1
+            if count == 100:
+                count = 0
+                time_elapsed = time.perf_counter() - start_time
+                print('Rate : ', int(100 / time_elapsed), ' FPS')
+                start_time = time.perf_counter()
+            if size > 90:
+                print('Reverse')
+            elif side_shift > 0:
                 print('Go Left')
-            elif aruco_shift < 0:
+            elif side_shift < 0:
                 print('Go Right')
             else:
                 print('Go Straight')
-        time.sleep(1)
+    finally:
+        picam2.stop()
+        cv2.destroyAllWindows()
+
+if __name__== "__main__":
+    standalone_camera_loop()

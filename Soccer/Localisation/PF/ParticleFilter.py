@@ -1,16 +1,6 @@
 
-import sys, os, json, array
-
-if sys.version != '3.4.0':
-    from random import *
-    used_with_OpenMV = False
-else:
-    import time
-    from urandom import getrandbits
-    import starkit
-    used_with_OpenMV = True
-
-used_with_OpenMV_firmware = True
+import os, json, array
+from random import getrandbits
 
 import math
 from math import pi
@@ -337,11 +327,7 @@ class ParticleFilter():
             self.tmp[i *4 + 3] = 0
             self.weights[i] = 0 
         
-        if used_with_OpenMV:
-            clock = time.clock()
-            clock.tick()
         S = self.weight_calc_wrap(observations)
-        if used_with_OpenMV: print('timestamp 1 =', clock.avg())
         if S == 0: return
         S = S / 20000
         for i in range(self.n):
@@ -365,35 +351,14 @@ class ParticleFilter():
         self.update_consistency(observations)
 
     def weight_calc_wrap(self, observations):
-        if used_with_OpenMV and used_with_OpenMV_firmware:
-            array_observation_lines = array.array('f',[])
-            for line in observations['lines']:
-                array_observation_lines.extend(array.array('f',line))
-            array_observations =[]
-            for i in range(len(self.land_keys)):
-                obs = array.array('f',[])
-                if self.land_keys[i] == 'unsorted_posts':
-                    for j in range(int(self.unsorted_posts[0])):
-                        pass
-                if self.land_keys[i] == 'post1':
-                    for j in range(int(self.post1[0])):
-                        pass
-                for j in range(len(observations[self.land_keys[i]])):
-                    ob1 = array.array('f',observations[self.land_keys[i]][j])
-                    obs.extend(ob1)
-                array_observations.append(obs)
-            S = starkit.weight_calculation(self.n, array_observations, self.array_landmarks, self.gauss_noise,
-                                           self.p, array_observation_lines, self.landmark_lines_x, self.landmark_lines_y,
-                                           self.line_gauss_noise, self.weights)
-        else:
-            landmarks = self.landmarks
-            n = self.n
-            p = self.p
-            weights = self.weights
-            gauss_noise = self.gauss_noise
-            line_gauss_noise = self.line_gauss_noise
-            weights, S = weight_calculation(n, weights, observations, landmarks, gauss_noise, line_gauss_noise, p)
-            self.weights = weights
+        landmarks = self.landmarks
+        n = self.n
+        p = self.p
+        weights = self.weights
+        gauss_noise = self.gauss_noise
+        line_gauss_noise = self.line_gauss_noise
+        weights, S = weight_calculation(n, weights, observations, landmarks, gauss_noise, line_gauss_noise, p)
+        self.weights = weights
         return S
 
     #def custom_reset(self, x, y, yaw):

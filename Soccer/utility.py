@@ -1,17 +1,10 @@
 """
-Module provides some utilities which can run with same result and same
-synatx both in Micropython of OpenMV and in standard CPython
+Module provides random helpers shared by the runtime code.
 """
 
 
-import sys, math
-
-if sys.version == '3.4.0':
-    from urandom import getrandbits
-    used_with_OpenMV = True
-else:
-    from random import *
-    used_with_OpenMV = False
+import math
+from random import getrandbits
 
 
 
@@ -54,5 +47,4 @@ def gaussian( x, sigma):
     # calculates the probability of x for 1-dim Gaussian with mean mu and var. sigma
     """
     return math.exp(-(x ** 2) / 2*(sigma ** 2)) / math.sqrt(2.0 * math.pi * (sigma ** 2))
-
 

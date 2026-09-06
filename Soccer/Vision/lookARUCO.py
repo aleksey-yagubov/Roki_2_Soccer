@@ -1,5 +1,3 @@
-from picamera2 import Picamera2
-from libcamera import controls
 import cv2
 import time
 import numpy as np
@@ -7,7 +5,6 @@ from Soccer.Vision.led_blink import Led
 import math
 import yaml
 from yaml.loader import SafeLoader
-import os
 
 undistortPointMap = np.load("Soccer/Vision/undistortPointMap_x_y.npy")
 P_matrix = np.load("Soccer/Vision/Camera_calibration_P.npy")
@@ -31,12 +28,12 @@ def detect_aruco_markers(frame, led, ID):
             if ids_raw[i][0] == ID:
                 ids = np.array([ID] ,dtype= np.int32)
                 corners.append(corners_raw[i])
-    rvec , tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, markerSizeInCM, mtx, dist)
-    try:
-        distance = tvec[0][0][2]
-    except Exception: distance = 0
-    #print(ids)
     if ids is not None:
+        rvec , tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corners, markerSizeInCM, mtx, dist)
+        try:
+            distance = tvec[0][0][2]
+        except Exception: distance = 0
+        #print(ids)
         # границы обнаруженных маркеров
         frame = cv2.aruco.drawDetectedMarkers(frame, corners, ids)
         # перебор всех обнаруженных маркеры
@@ -59,14 +56,42 @@ def detect_aruco_markers(frame, led, ID):
         #print('size = ', size, 'side_shift = ', side_shift )
 
     else:
-        size = side_shift = aruco_angle_horizontal = 0
+        size = side_shift = aruco_angle_horizontal = distance = 0
     return frame , size, side_shift, aruco_angle_horizontal, distance
 
-def camera_process(size, side_shift, aruco_angle_horizontal, distance, stopFlag, ID):
-    picam2 = Picamera2(camera_num=0)
+def track_from_vision(vision, size, side_shift, aruco_angle_horizontal, distance, stopFlag, ID):
+    led = getattr(vision, "led", None) or Led()
+    count = 0
+    start_time = time.perf_counter()
+    while not stopFlag.value:
+        frame, frame_number = vision.camera.snapshot()
+        if frame_number == 0:
+            continue
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        image, size.value, side_shift.value, aruco_angle_horizontal.value, distance.value = detect_aruco_markers(gray, led, ID)
+        vision.display_camera_image(image, "ARUCO")
+        count += 1
+        if count == 100:
+            count = 0
+            time_elapsed = time.perf_counter() - start_time
+            print('Rate : ', int(100 / time_elapsed), ' FPS')
+            start_time = time.perf_counter()
+        if size.value > 180:
+            print('exit')
+            stopFlag.value = True
+            break
+
+def standalone_camera_loop(ID=88):
+    from picamera2 import Picamera2
+    from libcamera import controls
+
     led = Led()
-    picam2.configure(picam2.create_preview_configuration(main={"format": 'RGB888', "size": (1600, 1300)}, lores={"format": 'YUV420', "size": (800, 650)})) 
-    picam2.set_controls({"AeExposureMode":  controls.AeExposureModeEnum.Short})
+    picam2 = Picamera2(camera_num=0)
+    picam2.configure(picam2.create_video_configuration(
+        main={"format": "RGB888", "size": (800, 650)},
+        display=None,
+    ))
+    picam2.set_controls({"AeExposureMode": controls.AeExposureModeEnum.Short})
     picam2.start()
     picam2.set_controls({"ExposureTime": 500})
     picam2.set_controls({"AnalogueGain": 8.0})
@@ -75,30 +100,37 @@ def camera_process(size, side_shift, aruco_angle_horizontal, distance, stopFlag,
     print("gain : ", picam2.capture_metadata()["AnalogueGain"])
     count = 0
     start_time = time.perf_counter()
-    while not stopFlag.value:
-        request = picam2.capture_request()
-        im = request.make_array("lores")  
-        #time.sleep(100)
-        #cv2.waitKey(50)
-        request.release()
-        #cv2.waitKey(50)
-        im = cv2.cvtColor(im, cv2.COLOR_YUV420p2GRAY)
-        #cv2.imshow("Camera1", im)
-        #cv2.waitKey(10)
-        im, size.value, side_shift.value, aruco_angle_horizontal.value, distance.value = detect_aruco_markers(im, led, ID)     # Обнаружение аруко маркеров
-        cv2.imshow("Camera", im)
-        cv2.waitKey(10)
-        count += 1
-        if count == 100:
-            count = 0
-            time_elapsed = time.perf_counter() - start_time
-            print('Rate : ', int(100 / time_elapsed), ' FPS')
-            start_time = time.perf_counter()
-        if size.value > 180 : 
-            print('exit')
-            stopFlag.value = True
-            break
-    cv2.destroyAllWindows()
+    try:
+        while True:
+            request = picam2.capture_request()
+            image = request.make_array("main")
+            request.release()
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            image, size, side_shift, aruco_angle_horizontal, distance = detect_aruco_markers(image, led, ID)
+            cv2.imshow("ARUCO", image)
+            key = cv2.waitKey(10) & 0xFF
+            if key == ord('q'):
+                break
+            count += 1
+            if count == 100:
+                count = 0
+                time_elapsed = time.perf_counter() - start_time
+                print('Rate : ', int(100 / time_elapsed), ' FPS')
+                start_time = time.perf_counter()
+            print("aruco_angle_horizontal: ", aruco_angle_horizontal)
+            print('distance :', distance)
+            print('size :', size)
+            if size > 150:
+                print('Reverse')
+            elif side_shift > 0:
+                print('Go Left')
+            elif side_shift < 0:
+                print('Go Right')
+            else:
+                print('Go Straight')
+    finally:
+        picam2.stop()
+        cv2.destroyAllWindows()
 
 def evaluate_distance(corners):
     markerSizeInCM = 16
@@ -106,33 +138,4 @@ def evaluate_distance(corners):
     return tvec[2]
 
 if __name__== "__main__":
-    from multiprocessing import Value, Process
-    from led_blink import Led
-    from ctypes import c_bool
-    size = Value('i', 0)
-    side_shift = Value('i', 0)
-    aruco_angle_horizontal = Value('d', 0)
-    distance = Value('d', 0)
-    stopFlag = Value(c_bool, False)
-    ID = 88
-    # Process for Vision Pipeline
-    cam_proc = Process(target= camera_process, args=(size, side_shift, aruco_angle_horizontal, distance, stopFlag, ID), daemon = True)
-    # start Process of Vision Pipeline
-    cam_proc.start()
-    while not stopFlag.value:
-        aruco_size = size.value
-        aruco_shift = side_shift.value
-        print("aruco_angle_horizontal: ", aruco_angle_horizontal.value)
-        print('distance :', distance.value)
-        print('size :', aruco_size)
-        if aruco_size > 150:
-            print('Reverse')
-            stopFlag.value = True
-        else:
-            if aruco_shift > 0:
-                print('Go Left')
-            elif aruco_shift < 0:
-                print('Go Right')
-            else:
-                print('Go Straight')
-        time.sleep(1)
+    standalone_camera_loop()

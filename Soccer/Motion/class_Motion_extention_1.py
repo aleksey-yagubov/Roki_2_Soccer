@@ -2,64 +2,6 @@ import math, time
 
 class Motion_extention_1:
 
-    def reset_camera_2_Normal_exposure(self):
-        self.sensor.reset()
-        self.sensor.set_pixformat(self.sensor.RGB565)
-        self.sensor.set_framesize(self.sensor.QVGA)
-        self.sensor.skip_frames(time = 500)
-        self.sensor.set_auto_exposure(False)
-        self.sensor.set_auto_whitebal(False)
-        self.sensor.skip_frames(time = 500)
-        self.sensor.set_auto_whitebal(False, rgb_gain_db = (-6.0, -3.0, 3.0))
-
-    def reset_camera_2_Short_exposure(self):
-        self.sensor.reset() # Initialize the camera sensor.
-        self.sensor.set_pixformat(self.sensor.RGB565)
-        self.sensor.set_framesize(self.sensor.QQVGA)
-        self.sensor.skip_frames(time = 2000) # Let new settings take affect.
-        self.sensor.set_auto_gain(False, gain_db= 15) # must be turned off for color tracking
-        self.sensor.skip_frames(time = 500)
-        print('gain: ', self.sensor.get_gain_db())
-        self.sensor.set_auto_exposure(False, 2500)
-        self.sensor.skip_frames(time = 500)
-        print('exposure: ', self.sensor.get_exposure_us())
-        self.sensor.set_auto_whitebal(False) # must be turned off for color tracking
-        self.sensor.skip_frames(time = 500)
-        self.sensor.set_auto_whitebal(False, rgb_gain_db = (-6.0, -3.0, 3.0))
-
-    def check_camera(self):
-        if self.glob.camera_ON:
-            if self.glob.SIMULATION == 2 :
-                img = self.sensor.snapshot().lens_corr(strength = 1.45, zoom = 1.0)
-                blobs = img.find_blobs([self.vision.TH['orange ball']['th']],
-                                        pixels_threshold=self.vision.TH['orange ball']['pixel'],
-                                        area_threshold=self.vision.TH['orange ball']['area'],
-                                        merge=True, margin=10)
-            else:
-                img_ = self.vision_Sensor_Get_Image()
-                self.vision_Sensor_Display(img_)
-                img = self.re.Image(img_)
-                blobs = img.find_blobs([self.vision.TH['orange ball']['th']],
-                                            pixels_threshold = self.vision.TH['orange ball']['pixel'],
-                                            area_threshold = self.vision.TH['orange ball']['area'],
-                                            merge=True)
-            if not blobs: 
-                self.relative_ball_position = [0,0]
-                return 
-            blobs = self.sorted_blobs(blobs, number_of_blobs=1)
-            course_and_distance_to_ball = self.get_course_and_distance_to_ball(blobs[0])
-            ball_y = course_and_distance_to_ball[1] * math.sin(course_and_distance_to_ball[0]) * 1000
-            ball_x = course_and_distance_to_ball[1] * math.cos(course_and_distance_to_ball[0]) * 1000
-            if self.camera_counter == 0: 
-                ball_x_filtered = ball_x
-                ball_y_filtered = ball_y
-            else:
-                ball_x_filtered = (self.relative_ball_position[0] * self.camera_counter + ball_x) / (self.camera_counter +1)
-                ball_y_filtered = (self.relative_ball_position[1] * self.camera_counter + ball_y) / (self.camera_counter +1)
-            self.relative_ball_position = [ball_x_filtered, ball_y_filtered]
-            self.camera_counter += 1
-            return
-
     def walk_Cycle_slow(self, stepLength,sideLength, rotation,cycle, number_Of_Cycles, half = False):
         self.robot_In_0_Pose = False
         if not self.falling_Test() == 0:
@@ -97,7 +39,6 @@ class Motion_extention_1:
         for iii in range(0,frameNumberPerCycle ,framestep):
             if half and iii == (frameNumberPerCycle/2 - framestep): break
             self.yr, self.yl = - self.params['SOLE_LANDING_SKEW'], self.params['SOLE_LANDING_SKEW']
-            if self.glob.SIMULATION == 2: start1 = self.pyb.millis()
             if 0<= iii <self.fr1 :                                              # FASA 1
                 if iii < self.fr1/2 :
                     alpha = alpha01 * (iii + framestep)
@@ -211,8 +152,6 @@ class Motion_extention_1:
             angles = self.computeAlphaForWalk()
             #if iii  == self.fr1+self.fr2:
             if iii == 0: self.camera_counter = 0
-            #if iii % 20 == 0:
-            #    self.check_camera()
             if not self.falling_Flag ==0: return
             if len(angles)==0:
                 self.exitFlag = self.exitFlag +1
@@ -277,5 +216,3 @@ class Motion_extention_1:
         else: self.local.coord_shift[1] = self.side_step_left_yield * abs(sideLength)/20/1000
         self.local.coordinate_record(odometry = True, shift = True)
         if self.glob.SIMULATION == 5: self.wait_for_gueue_end(self.with_Vision)
-
-

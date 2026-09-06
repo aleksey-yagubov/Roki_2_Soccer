@@ -9,11 +9,10 @@ from Soccer.Vision.class_Vision_RPI import Vision_RPI
 from Soccer.Localisation.class_Local import *
 from Soccer.strategy import Player
 from Soccer.Motion.class_Motion_real import Motion_real
+from Soccer.config_paths import init_param_read_path, repo_root_str
 
 SIMULATION = 5
-current_work_directory = os.getcwd()
-current_work_directory = current_work_directory.replace('\\', '/')
-current_work_directory += '/'
+current_work_directory = repo_root_str(os.getcwd())
 
 try:
     from button_test import Button_Test
@@ -26,7 +25,7 @@ try:
     button = Button_Test(labels)
     first_pressed_button = button.wait_for_button_pressing(message ="'Choose role'")
 
-    with open("/home/pi/Desktop/" + "Init_params/Real/Real_landmarks.json", "r") as f:
+    with open(init_param_read_path(current_work_directory, "Real/Real_landmarks.json"), "r") as f:
         landmarks = json.loads(f.read())
     subrole = ' '
     if first_pressed_button == 'forward_center':
@@ -106,4 +105,3 @@ except Exception as e:
     f.close()
     traceback.print_exception(exc_type, exc_value, exc_traceback,
                           limit=None, file=sys.stdout)
-

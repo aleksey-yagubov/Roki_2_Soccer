@@ -1,13 +1,11 @@
 import json
-from turtle import width
-import cv2
 import time, math, json, struct
 #import reload
-from scipy.spatial.transform import Rotation as R
 import numpy as np
 from Soccer.Vision.camera import Camera
 from Soccer.Vision.class_Vision_General import Vision_General
 from Soccer.Vision.led_blink import Led
+from Soccer.config_paths import init_param_read_path
 import os
 
 
@@ -16,7 +14,7 @@ CAMERA_FRAME_DURATION_US = 16700
 class Vision_RPI(Vision_General):
     def __init__(self, glob):
         super().__init__(glob)
-        with open("/home/pi/Desktop/" + "Init_params/Real/Real_Thresholds.json", "r") as f:
+        with open(init_param_read_path(self.glob.current_work_directory, "Real/Real_Thresholds.json"), "r") as f:
             self.TH = json.loads(f.read())
         self.undistortPointMap = np.load(self.glob.current_work_directory + "Soccer/Vision/undistortPointMap_x_y.npy")
         P_matrix = np.load(self.glob.current_work_directory + "Soccer/Vision/Camera_calibration_P.npy")
@@ -44,9 +42,7 @@ class Vision_RPI(Vision_General):
         else: return False, None, None, None, None, None
 
     def display_camera_image(self, image, window = 'Vision Sensor'):
-        if self.glob.motion.Vision_Sensor_Display_On:
-            cv2.imshow(window, image)
-            cv2.waitKey(10)
+        self.glob.display.show(window, image)
 
     def visible_reaction_ball(self):
         self.led.blink.set()
@@ -60,4 +56,3 @@ class Vision_RPI(Vision_General):
 if __name__=="__main__":
     v = Vision_RPI(1)
     print(v.TH['orange ball'])
-

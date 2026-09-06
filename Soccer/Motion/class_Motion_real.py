@@ -8,7 +8,7 @@ import threading
 import threading
 import Soccer.Vision.reload as re
 from Soccer.Motion.class_Motion import Motion
-#from ball_Approach_Steps_Seq import *
+from Soccer.config_paths import init_param_write_path
 
 def uprint(*text):
     print(*text )
@@ -45,6 +45,15 @@ class Motion_real(Motion):
             [ 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
             ]
 
+    def neural_worker_ready(self):
+        neural = getattr(self.glob, "neural", None)
+        if not getattr(self.glob, "neural_vision", False) or neural is None:
+            return False
+        is_ready = getattr(neural, "is_ready", None)
+        if callable(is_ready):
+            return bool(is_ready())
+        return bool(getattr(neural, "enabled", False))
+
     def one_jump_forward(self, fraction = 1, hands_on = True):
         motion_list =  self.jump_motion_forward.copy()
         motion_list[0][2] = int(motion_list[0][2] * fraction )
@@ -76,28 +85,23 @@ class Motion_real(Motion):
             # Полученная величина наклона камеры эквивалентна (69) градуса от вертикали.
             # Вторая позиция головы 23 градуса к вертикали отличается от первой на 1155
         return_value = 0
-        if self.glob.SIMULATION == 2:
-            uprint(' head_tilt_calibr')
-            i= 400
+        if self.glob.SIMULATION == 5:
+            i = 400
             a = True
-            self.kondo.setUserParameter(19,0)
-            while(a):
-                if (i < -1500) : a=False
-                #clock.tick()
-                i=i-1
-                uprint ('i =', i)
-                b=self.kondo.setUserParameter(20,i)
-                for j in range(5):
-                    img = self.sensor.snapshot().lens_corr(strength = 1.45, zoom = 1.0)
-                    for blob in img.find_blobs([self.vision.TH['orange ball']['th']], pixels_threshold=20, area_threshold=20, merge=True):
-                        #if blob.roundness() > 0.5:
-                        img.draw_rectangle(blob.rect())
-                        img.draw_cross(blob.cx(), blob.cy())
-                        uprint('blob.cy() =', blob.cy())
-                        #if (blob.y()+ blob.h()) <=120 : a=False
-                        if blob.cy() <=self.params['CAMERA_VERTICAL_RESOLUTION'] / 2 : a=False
-                        return_value = blob.cy()
-
+            self.head_Return(0, self.neck_play_pose)
+            while a:
+                if i < -1500:
+                    a = False
+                i -= 1
+                self.head_Return(0, i)
+                ok, frame, _, _, _, _ = self.vision.snapshot()
+                if not ok:
+                    continue
+                img = re.Image(frame, copy=False)
+                for blob in img.find_blobs([self.vision.TH['orange ball']['th']], pixels_threshold=20, area_threshold=20, merge=True):
+                    if blob.cy() <= self.params['CAMERA_VERTICAL_RESOLUTION'] / 2:
+                        a = False
+                    return_value = blob.cy()
         else:
             #import reload as re
             i= 200
@@ -115,7 +119,7 @@ class Motion_real(Motion):
                 #self.sim.simxSynchronousTrigger(self.clientID)
                 self.trigger('head_tilt_calibration')
                 img1 = self.vision_Sensor_Get_Image()
-                img = re.Image(img1)
+                img = re.Image(img1, copy=False)
                 for blob in img.find_blobs([self.vision.TH['orange ball']['th']],
                                             pixels_threshold=self.vision.TH['orange ball']['pixel'],
                                             area_threshold=self.vision.TH['orange ball']['area'],
@@ -130,10 +134,10 @@ class Motion_real(Motion):
             self.refresh_Orientation()
             data = {"neck_calibr": self.neck_calibr, "neck_play_pose": self.neck_play_pose, "head_pitch_with_horizontal_camera": self.euler_angle['pitch']}
             if self.glob.SIMULATION == 5:
-                with open(self.glob.current_work_directory + "Init_params/Real/Real_calibr.json", "w") as f:
+                with open(init_param_write_path(self.glob.current_work_directory, "Real/Real_calibr.json"), "w") as f:
                     json.dump(data, f)
             else:
-                with open(self.glob.current_work_directory + "Init_params/Sim/" + "Sim_calibr.json", "w") as f:
+                with open(init_param_write_path(self.glob.current_work_directory, "Sim/Sim_calibr.json"), "w") as f:
                     json.dump(data, f)
             return True
         else: return False
@@ -172,7 +176,7 @@ class Motion_real(Motion):
                 #self.sim.simxSynchronousTrigger(self.clientID)
                 self.trigger('seek_Ball_In_Pose')
 
-        if self.glob.SIMULATION == 5:
+        if self.neural_worker_ready():
             a, course, dist = self.vision.seek_Ball_In_Frame_N(with_Localization)
         else:
             a, course, dist, ball_blob = self.vision.seek_Ball_In_Frame(with_Localization)
@@ -254,7 +258,7 @@ class Motion_real(Motion):
                     self.sim.simxSynchronousTrigger(self.clientID)
                     self.trigger('seek_Ball_In_Pose')
             #self.refresh_Orientation()
-            if self.glob.SIMULATION == 5:
+            if self.neural_worker_ready():
                 a, course, dist = self.vision.seek_Ball_In_Frame_N(with_Localization)
             else:
                 a, course, dist, ball_blob = self.vision.seek_Ball_In_Frame(with_Localization)
@@ -299,7 +303,7 @@ class Motion_real(Motion):
             #    for j in range(16):
             #        self.sim.simxSynchronousTrigger(self.clientID)
             self.refresh_Orientation()
-            if self.glob.SIMULATION == 5:
+            if self.neural_worker_ready():
                 a, course, dist, speed = self.vision.detect_Ball_Speed_N()
             else:
                 a, course, dist, speed = self.vision.detect_Ball_Speed()
@@ -393,13 +397,9 @@ class Motion_real(Motion):
 
     def get_course_and_distance_to_post(self, blob_cx, blob_y_plus_h):   # returns course in degrees and distance in mm
         c = self.neck_calibr
-        if self.glob.SIMULATION == 2:
-            z,a = self.kondo.getUserParameter(19)
-            z,b = self.kondo.getUserParameter(20)
+        if self.glob.SIMULATION == 5:
             a = self.neck_pan
             b = self.neck_tilt
-            # U19 - Шея поворот
-            # U20 - Шея Наклон
         else:
             returnCode, position21= self.sim.simxGetJointPosition(self.clientID, self.jointHandle[21], self.sim.simx_opmode_blocking)
             a = position21*self.ACTIVESERVOS[21][3]*1698        # Шея поворот
@@ -1673,5 +1673,3 @@ class Motion_real(Motion):
 
 if __name__=="__main__":
     print('This is not main module!')
-
-

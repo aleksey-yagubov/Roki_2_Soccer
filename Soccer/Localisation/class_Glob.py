@@ -1,5 +1,7 @@
-import json, array, os
+import json, array, os, time
 from multiprocessing import Array 
+from Soccer.config_paths import init_param_read_path, repo_root_str
+from Soccer.Vision.display import create_display
 
 class Glob:
     def __init__(self, simulation, current_work_directory, particles_number = 1000, event_type = 'Robocup'):
@@ -21,20 +23,25 @@ class Glob:
         elif event_type == 'Robocup':
             self.COLUMNS = 18
             self.ROWS = 13
-        self.current_work_directory = current_work_directory
+        self.current_work_directory = repo_root_str(current_work_directory)
         self.particles_number = particles_number
         #self.pf_alloc1 = array.array('I',(0 for i in range(particles_number*4)))
         #self.pf_alloc2 = array.array('I',(0 for i in range(particles_number*4)))
         #self.weights = array.array('I',(0 for i in range(particles_number)))
         #self.new_p = array.array('I',(0 for i in range(particles_number)))
         self.strategy_data = array.array('b',(0 for i in range(self.COLUMNS * self.ROWS * 2)))
-        self.SIMULATION = simulation             # 0 - Simulation without physics, 1 - Simulation with physics, 2 - live on openMV
+        self.SIMULATION = simulation             # 0/1/3 - simulation, 5 - live on RPi/CM4
+        if self.SIMULATION == 2:
+            raise ValueError("SIMULATION == 2 (OpenMV runtime) has been removed")
         self.ball_coord = Array('f', 2)
         self.ball_coord =[0.0, 0.0]                # global coordinate
         self.ball_course = 0                       # local course from robot body
         self.ball_distance = 0                     # local distance from robot body
         self.ball_speed = [0.0, 0.0]      # [tangential_speed, front_speed ]
         self.robot_see_ball = 0
+        self.direction_to_guest = None
+        self.kick_power_planned = None
+        self.strategy_cell = None
         self.pf_coord = [0.0,0.0,0.0]
         self.obstacles = []
         self.motion = None
@@ -43,11 +50,11 @@ class Glob:
         self.camera_down_Flag = False
         if self.SIMULATION == 1 or self.SIMULATION == 0 or self.SIMULATION == 3:
             import socket
-            self.landmarks_filename = current_work_directory + "Init_params/Sim/Sim_landmarks.json"
-            params_filename = current_work_directory + "Init_params/Sim/" + "Sim_params.json"
+            self.landmarks_filename = str(init_param_read_path(self.current_work_directory, "Sim/Sim_landmarks.json"))
+            params_filename = str(init_param_read_path(self.current_work_directory, "Sim/Sim_params.json"))
             #params_filename = current_work_directory + "Init_params/Real/Real_params.json"
-            params_2_filename = current_work_directory + "Init_params/Sim/" + "Sim_params_2.json"
-            with open(current_work_directory + "Init_params/Sim/" + "wifi_params.json", "r") as f:
+            params_2_filename = str(init_param_read_path(self.current_work_directory, "Sim/Sim_params_2.json"))
+            with open(init_param_read_path(self.current_work_directory, "Sim/wifi_params.json"), "r") as f:
                 self.wifi_params = json.loads(f.read())
             if self.wifi_params['WIFI_IS_ON']:
                 self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -61,10 +68,12 @@ class Glob:
             self.camera = Camera()
             self.STM_channel_class = STM_channel
             #import usocket, network
-            if self.event_type == 'FIRA': self.landmarks_filename = "/home/pi/Desktop/" + "Init_params/Real/Real_landmarks_FIRA.json"
-            else: self.landmarks_filename = "/home/pi/Desktop/" + "Init_params/Real/Real_landmarks.json"
-            params_filename = "/home/pi/Desktop/" + "Init_params/Real/Real_params.json"
-            params_2_filename = "/home/pi/Desktop/" + "Init_params/Real/Real_params_2.json"
+            if self.event_type == 'FIRA':
+                self.landmarks_filename = str(init_param_read_path(self.current_work_directory, "Real/Real_landmarks_FIRA.json"))
+            else:
+                self.landmarks_filename = str(init_param_read_path(self.current_work_directory, "Real/Real_landmarks.json"))
+            params_filename = str(init_param_read_path(self.current_work_directory, "Real/Real_params.json"))
+            params_2_filename = str(init_param_read_path(self.current_work_directory, "Real/Real_params_2.json"))
             self.Roki = None
             self.stm_channel = STM_channel(self)
             self.rcb = self.stm_channel.rcb
@@ -74,6 +83,7 @@ class Glob:
             self.params = json.loads(f.read())
         with open(params_2_filename, "r") as f:
             self.params.update(json.loads(f.read()))
+        self.display = create_display(self.params, self.SIMULATION)
         self.use_particle_filter = self.params['USE_PARTICLE_FILTER']
         if self.SIMULATION == 5 : self.stm_channel.mb.SetBodyQueuePeriod(self.params['FRAME_DELAY'])
         self.first_step_yield = (19 * self.params['RUN_TEST_10_STEPS'] - 9 * self.params['RUN_TEST_20_STEPS']) / 10
@@ -100,10 +110,10 @@ class Glob:
 
     def import_strategy_data(self):
         if self.event_type == 'FIRA':
-            strategy_data_file = "Init_params/strategy_data_FIRA.json"
+            strategy_data_file = init_param_read_path(self.current_work_directory, "strategy_data_FIRA.json")
         else:
-            strategy_data_file = "Init_params/strategy_data.json"
-        with open(self.current_work_directory + strategy_data_file, "r") as f:
+            strategy_data_file = init_param_read_path(self.current_work_directory, "strategy_data.json")
+        with open(strategy_data_file, "r") as f:
             loaded_Dict = json.loads(f.read())
         if loaded_Dict.get('strategy_data') != None:
             strategy_data = loaded_Dict['strategy_data']
@@ -116,13 +126,39 @@ class Glob:
                 self.strategy_data[index1*2+1] = yaw
 
     def monitor(self):
-        report = {'ball': self.ball_coord, 'pf_coord': self.pf_coord , 'coord_odometry': self.local.coord_odometry}
+        report = {
+            'time': time.time(),
+            'role': self.role,
+            'event_type': self.event_type,
+            'ball': self.ball_coord,
+            'ball_course': self.ball_course,
+            'ball_distance': self.ball_distance,
+            'ball_speed': self.ball_speed,
+            'robot_see_ball': self.robot_see_ball,
+            'direction_to_guest': self.direction_to_guest,
+            'kick_power_planned': self.kick_power_planned,
+            'strategy_cell': self.strategy_cell,
+            'pf_coord': self.pf_coord,
+            'coord_odometry': self.local.coord_odometry,
+            'coord_visible': getattr(self.local, 'coord_visible', None),
+            'ball_odometry': getattr(self.local, 'ball_odometry', None),
+            'obstacles': self.obstacles,
+            'post_data_in_pose_number': getattr(self.local, 'post_data_in_pose_number', 0),
+            'data_quality_is_good': self.data_quality_is_good,
+            'camera_down': self.camera_down_Flag,
+            'use_particle_filter': self.use_particle_filter,
+            'obstacle_avoidance': self.obstacleAvoidanceIsOn,
+            'landmarks': {
+                'FIELD_LENGTH': self.landmarks.get('FIELD_LENGTH'),
+                'FIELD_WIDTH': self.landmarks.get('FIELD_WIDTH'),
+            },
+        }
         with open(self.monitor_filename, "w") as f:
             json.dump(report, f)
 
     def neural_vision_enable(self):
-        from Soccer.Vision.yolov5_tools import Neural
-        self.neural = Neural(self.role)
+        from Soccer.Vision.neuro_client import Neural
+        self.neural = Neural(self.role, self.display)
 
     def camera_reset(self):
         print('Camera resetting')
@@ -179,5 +215,3 @@ class Variables_4_Walk:
         self.rotation_yield_left = 0
         self.imu_drift_speed = 0
         
-
-

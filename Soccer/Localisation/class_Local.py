@@ -131,24 +131,16 @@ class Local():
         self.correct_yaw_in_pf()
         #self.call_Par_Filter.pf.fall_reset()
 
-    def coordinate_trust_estimation(self):
-        return self.call_Par_Filter.pf.consistency
-
     def detect_Post_In_image(self,img_, post_color):            # color: 1 - blue, 2- yellow
         all_goal_is_in_picture = 0
         post_list = []
         while (all_goal_is_in_picture < 2):
-            if self.glob.SIMULATION == 2 :
-                img = img_
-            else:
-                img = self.re.Image(img_)
-                labimg = self.cv2.cvtColor (img_, self.cv2.COLOR_BGR2LAB)
-                #self.motion.vision_Sensor_Display( img_)
+            img = self.re.Image(img_)
+            labimg = img.lab()
+            #self.motion.vision_Sensor_Display( img_)
             if all_goal_is_in_picture == 1 :
                 all_goal_is_in_picture = all_goal_is_in_picture + 1
-            #if self.glob.SIMULATION == 2 :
             post_thresholds =  [self.vision.TH[post_color]['th']]
-            #else: post_thresholds =  self.vision.TH[post_color]['th']
             if all_goal_is_in_picture == 0:
                 pixels_threshold = self.vision.TH[post_color]['pixel']
                 area_threshold = self.vision.TH[post_color]['area']
@@ -163,36 +155,23 @@ class Local():
                     if blob.w() > self.last_x - 5: continue         # blob connected to both sides of picture. No opportunity to recognize data
                     for y in range (blob.y() + blob.h(), blob.y() + blob.h() + 5, 1 ):
                         for x in range (blob.x(), blob.x() + blob.w(), 1 ):
-                            if self.glob.SIMULATION == 2 :
-                                a=self.image.rgb_to_lab(img.get_pixel(x , y))
-                                is_green = (self.vision.TH['green field']['th'][0] < a[0] < self.vision.TH['green field']['th'][1]) and \
-                                           (self.vision.TH['green field']['th'][2] < a[1] < self.vision.TH['green field']['th'][3]) and \
-                                           (self.vision.TH['green field']['th'][4] < a[2] < self.vision.TH['green field']['th'][5])
-                                is_white = (self.vision.TH['white marking']['th'][0] < a[0] < self.vision.TH['white marking']['th'][1]) and \
-                                           (self.vision.TH['white marking']['th'][2] < a[1] < self.vision.TH['white marking']['th'][3]) and \
-                                           (self.vision.TH['white marking']['th'][4] < a[2] < self.vision.TH['white marking']['th'][5])
-                            else:
-                                is_green = (self.vision.TH['green field']['th'][0] < labimg[y][x][0]/ 2.55 <  self.vision.TH['green field']['th'][1]) and \
-                                           (self.vision.TH['green field']['th'][2] < labimg[y][x][1]- 128 <  self.vision.TH['green field']['th'][3]) and \
-                                           (self.vision.TH['green field']['th'][4] < labimg[y][x][2]- 128 <  self.vision.TH['green field']['th'][5])
-                                is_white = (self.vision.TH['white marking']['th'][0] < labimg[y][x][0]/ 2.55 <  self.vision.TH['white marking']['th'][1]) and \
-                                           (self.vision.TH['white marking']['th'][2] < labimg[y][x][1]- 128 <  self.vision.TH['white marking']['th'][3]) and \
-                                           (self.vision.TH['white marking']['th'][4] < labimg[y][x][2]- 128 <  self.vision.TH['white marking']['th'][5])
+                            is_green = (self.vision.TH['green field']['th'][0] < labimg[y][x][0]/ 2.55 <  self.vision.TH['green field']['th'][1]) and \
+                                       (self.vision.TH['green field']['th'][2] < labimg[y][x][1]- 128 <  self.vision.TH['green field']['th'][3]) and \
+                                       (self.vision.TH['green field']['th'][4] < labimg[y][x][2]- 128 <  self.vision.TH['green field']['th'][5])
+                            is_white = (self.vision.TH['white marking']['th'][0] < labimg[y][x][0]/ 2.55 <  self.vision.TH['white marking']['th'][1]) and \
+                                       (self.vision.TH['white marking']['th'][2] < labimg[y][x][1]- 128 <  self.vision.TH['white marking']['th'][3]) and \
+                                       (self.vision.TH['white marking']['th'][4] < labimg[y][x][2]- 128 <  self.vision.TH['white marking']['th'][5])
                             if is_green == True or is_white == True : blob_Is_Post = True
                             if blob_Is_Post == True: break
                         if blob_Is_Post == True: break
                     if blob_Is_Post == True:
-                        if self.glob.SIMULATION != 2 :
-                            img.draw_rectangle(blob.rect(), color = (255, 255, 255))
-                            #self.motion.vision_Sensor_Display( img.img)
+                        img.draw_rectangle(blob.rect(), color = (255, 255, 255))
+                        #self.motion.vision_Sensor_Display( img.img)
                         blob_y_plus_h = blob.y() + blob.h()
                         y = blob_y_plus_h - 2
                         post_color_pixels = []
                         for x in range (blob.x(), blob.x() + blob.w(), 1 ):
-                            if self.glob.SIMULATION == 2 :
-                                is_post_color = self.vision.TH[post_color]['th'][0] < a[0] < self.vision.TH[post_color]['th'][1] and self.vision.TH[post_color]['th'][2] < a[1] < self.vision.TH[post_color]['th'][3] and self.vision.TH[post_color]['th'][4] < a[2] < self.vision.TH[post_color]['th'][5]
-                            else:
-                                is_post_color = self.vision.TH[post_color]['th'][0] < labimg[y][x][0]/ 2.55 <  self.vision.TH[post_color]['th'][1] and self.vision.TH[post_color]['th'][2] < labimg[y][x][1]- 128 <  self.vision.TH[post_color]['th'][3] and self.vision.TH[post_color]['th'][4] < labimg[y][x][2]- 128 <  self.vision.TH[post_color]['th'][5]
+                            is_post_color = self.vision.TH[post_color]['th'][0] < labimg[y][x][0]/ 2.55 <  self.vision.TH[post_color]['th'][1] and self.vision.TH[post_color]['th'][2] < labimg[y][x][1]- 128 <  self.vision.TH[post_color]['th'][3] and self.vision.TH[post_color]['th'][4] < labimg[y][x][2]- 128 <  self.vision.TH[post_color]['th'][5]
                             if is_post_color == True: post_color_pixels.append(x)
                         if len(post_color_pixels) == 0: blob_cx = blob.cx()
                         else: blob_cx = int((post_color_pixels[0] + post_color_pixels[len(post_color_pixels)-1])/2)
@@ -203,14 +182,9 @@ class Local():
                         if virtual_width_of_post > self.width_of_goals / 2 :
                             if all_goal_is_in_picture == 0:
                                 all_goal_is_in_picture =1
-                                if self.glob.SIMULATION == 2 :
-                                    for y in range(0,blob.cy(),1):
-                                        for x in range(320):
-                                            img_.set_pixel(x,y,(0,0,0))
-                                else:
-                                    for y in range(0,blob.cy(),1):
-                                        for x in range(self.last_x + 1):
-                                            img_[y][x] =  img_[y][x]*0
+                                for y in range(0,blob.cy(),1):
+                                    for x in range(self.last_x + 1):
+                                        img_[y][x] =  img_[y][x]*0
                             else:
                                 post_list.append([course, dist, 1]) # recognized post
                         else:
@@ -232,14 +206,9 @@ class Local():
                         #        else:
                         #            if all_goal_is_in_picture == 0:
                         #                all_goal_is_in_picture =1
-                        #                if self.glob.SIMULATION == 2 :
-                        #                    for y in range(0,blob.cy(),1):
-                        #                        for x in range(320):
-                        #                            img_.set_pixel(x,y,(0,0,0))
-                        #                else:
-                        #                    for y in range(0,blob.cy(),1):
-                        #                        for x in range(self.last_x + 1):
-                        #                            img_[y][x] =  img_[y][x]*0
+                        #                for y in range(0,blob.cy(),1):
+                        #                    for x in range(self.last_x + 1):
+                        #                        img_[y][x] =  img_[y][x]*0
 
             if all_goal_is_in_picture == 0: break
         #uprint('posts number in frame = ', len(post_list))
@@ -513,7 +482,6 @@ class Local():
                 if self.pf_return_coord[0] == 1:
                     self.glob.pf_coord = self.pf_return_coord[1:]
                     self.pf_return_coord[0] = 0
-        #if self.glob.wifi_params['WIFI_IS_ON']: self.report_to_WIFI()
         if self.glob.monitor_is_on: self.glob.monitor()
         if (self.glob.SIMULATION == 1 or self.glob.SIMULATION == 0 or self.glob.SIMULATION == 3):
             timer1 = time.perf_counter() - self.timer0
@@ -574,9 +542,6 @@ class Local():
                     self.pf_deviation[1] = (self.pf_deviation[1] *(self.pf_deviation[0]-1) + pf_deviation)/self.pf_deviation[0]
                     print('{','"average pf":', self.pf_deviation[1], ', "current pf":', pf_deviation,'},', file = f)
 
-        elif self.glob.SIMULATION == 2 :
-            #if self.glob.wifi_params['WIFI_IS_ON']: self.report_to_WIFI()
-            timer1 = self.pyb.elapsed_millis(self.timer0)/1000
         #with open(current_work_directory + "Soccer/log/pf_data.json",'a') as f:
         #    print('{"time":', round(timer1,0),
         #         ',"glob.pf_coord":',
@@ -584,31 +549,6 @@ class Local():
         #         ',"glob.ball_coord":',
         #         [round(self.glob.ball_coord[0], 2), round(self.glob.ball_coord[1], 2)],
         #         '},', file = f)
-
-    def report_to_WIFI(self):
-        message_to_Host = {"ID": 0, "x": 0.0, "y": 0.0, "yaw": 0.0, "bx": 0.0, "by": 0.0, "bytes": 0}
-        if self.glob.SIMULATION == 2 : message_to_Host["ID"] = self.glob.wifi_params['ROBOT_ID']
-        else: message_to_Host["ID"] = str(self.motion.robot_Number)
-        message_to_Host["x"] = round(self.glob.pf_coord[0], 3)
-        message_to_Host["y"] = round(self.glob.pf_coord[1], 3)
-        message_to_Host["yaw"] = round(self.glob.pf_coord[2], 3)
-        message_to_Host["bx"] = round(self.glob.ball_coord[0], 3)
-        message_to_Host["by"] = round(self.glob.ball_coord[1], 3)
-        message_to_Host["bytes"] = len(bytes(array.array('I', (i for i in range(1)))))
-        data = str(message_to_Host).encode()
-        if self.glob.SIMULATION == 2 :
-            pin = self.pyb.Pin
-            pin('P2', pin.AF_PP, pin.PULL_DOWN, af = pin.AF5_SPI2)            # pyb.Pin.AF_PP = 2, pyb.Pin.PULL_DOWN = 2, pyb.Pin.AF5_SPI2 = 5
-            pin('P3', pin.OUT_PP, pin.PULL_UP, af = pin.AF5_SPI2)   # pyb.Pin.OUT_PP = 1, pyb.Pin.PULL_UP = 1
-        try:
-            self.glob.udp_socket.sendto(data, self.glob.target_wifi_address)
-            #self.glob.udp_socket.sendto('particles'.encode(), self.glob.target_wifi_address)
-            if self.glob.SIMULATION != 2:
-                if str(self.motion.robot_Number) == '':
-                    self.glob.udp_socket.sendto(self.glob.pf_alloc1, self.glob.target_wifi_address)
-        except Exception: 
-            print('failed to send')
-            pass
 
     def localisation_Complete(self):
         timer1= time.perf_counter()
@@ -921,7 +861,7 @@ class Local():
                 print('yaw_correction5 =', yaw_correction)
         else: return
         self.glob.imu_drift_correction -= yaw_correction
-        self.glob.imu_drift_last_correction_time = self.motion.utime.time()
+        self.glob.imu_drift_last_correction_time = time.perf_counter()
 
 
 
@@ -933,298 +873,117 @@ class Local():
         return rho, theta
 
     def detect_line_in_image(self, img):
-        if self.glob.SIMULATION == 2 :
-            self.sensor.flush()
-            img1 = self.sensor.alloc_extra_fb(160, 120, self.sensor.RGB565)
-            img2 = self.sensor.alloc_extra_fb(160, 120, self.sensor.RGB565)
-            img.copy(x_scale = 0.5, y_scale = 0.5, copy_to_fb = img1)
-            img.copy(x_scale = 0.5, y_scale = 0.5, copy_to_fb = img2)
-            #img.copy(x_scale = 0.5, y_scale = 0.5, copy_to_fb = img)
-            #pyb.delay(1000)
-            img4 = img1.binary([self.vision.TH["white marking"]['th']],to_bitmap=True, copy=False)
-            img3 = img2.binary([self.vision.TH["green field"]['th']],to_bitmap=True, copy=False)
-            img4.open(1)
-            img3.open(2)
-            #print(img3.compressed_for_ide(), end="")
-            #pyb.delay(1000)
-            #point_data = np.zeros((160,2), dtype = np.uint8)
-            #for x in range(160):
-            #    for y in range(120):
-            #        #if img3.get_pixel(x,y)[0] > 200: break
-            #        if img3.get_pixel(x,y) > 0: break
-            #    point_data[x,0] = x
-            #    point_data[x,1] = y
-            #line_segments_data = self.vision.detect_line_segments( point_data, 160,
-            #                                         rank_threshold = 15, line_num_limit = 3 )
-            line_segments_data = self.vision.detect_line_segments( img3, rank_threshold = 15,
-                                        line_num_limit = 3, upper_lines = True )
-            point_data = None
-            field_border_data = []
-            field_border_segments = []
-            for line_segment in line_segments_data:
-                rho, theta = self.convert_to_line_vector(line_segment[0], line_segment[1],
-                                                    line_segment[2], line_segment[3])
-                p_a1, p_b1 = 0, int(rho)
-                if theta != 0:
-                    p_a1 = -1 / math.tan(theta)
-                    p_b1 = rho/math.sin(theta)
-                line = []
-                if theta == 0: line = [int(rho),0,int(rho),119]
-                else:
-                    y = int(p_b1)
-                    if 0 <= y <= 119 :
+        last_y = self.glob.params['CAMERA_VERTICAL_RESOLUTION'] - 1
+        last_x = self.glob.params['CAMERA_HORIZONTAL_RESOLUTION'] - 1
+        img1 = self.re.Image(img)
+        img_white = img1.binary(self.vision.TH["white marking"]['th'])
+        green_mask = img1.binary(self.vision.TH["green field"]['th'])
+        line_segments_data = self.vision.detect_line_segments(green_mask, rank_threshold = 8,
+                                    line_num_limit = 3, upper_lines = True)
+        point_data = None
+        field_border_data = []
+        field_border_segments = []
+        for line_segment in line_segments_data:
+            rho, theta = self.convert_to_line_vector(line_segment[0], line_segment[1],
+                                                line_segment[2], line_segment[3])
+            p_a1, p_b1 = 0, int(rho)
+            if theta != 0:
+                p_a1 = -1 / math.tan(theta)
+                p_b1 = rho/math.sin(theta)
+            line = []
+            if theta == 0:
+                line = [int(rho),0,int(rho), last_y]
+            else:
+                y = int(p_b1)
+                if 0 <= y <= last_y :
+                    line.append(0)
+                    line.append(y)
+                y = int(last_x * p_a1 + p_b1)
+                if 0 <= y <= last_y :
+                    line.append(last_x)
+                    line.append(y)
+                if math.cos(theta) != 0:
+                    x = int(- p_b1 / p_a1)
+                    if 0 <= x <= last_x and len(line) < 4:
+                        line.append(x)
                         line.append(0)
-                        line.append(y)
-                    y = int(159 * p_a1 + p_b1)
-                    if 0 <= y <= 119 :
-                        line.append(159)
-                        line.append(y)
-                    if math.cos(theta) != 0:
-                        x = int(- p_b1 / p_a1)
-                        if 0 <= x <= 159 and len(line) < 4:
-                            line.append(x)
-                            line.append(0)
-                        x = int(- p_b1 / p_a1 + 119 / p_a1)
-                        if 0 <= x <= 159 and len(line) < 4:
-                            line.append(x)
-                            line.append(119)
-                #print('line = ', line)
-                if len(line) == 4:
-                    field_border_segments.append(line)
-                    field_border_data.append([p_a1, p_b1])
-                    #img.draw_line(line, (255,0,0))
-                #print( 'line = ', line)
-            #print(img3.compressed_for_ide(), end="")
-            #pyb.delay(1000)
-            #print(img4.compressed_for_ide(), end="")
-            #pyb.delay(1000)
-            #print(img.compressed_for_ide(), end="")
-            #pyb.delay(1000)
-            #print( 'field_border_data = ', field_border_data)
-            #print( 'field_border_segments =', field_border_segments)
-            len_field_border_data = len(field_border_data)
-            if len_field_border_data != 0:
-                if len_field_border_data == 3:
-                    k = 0
-                    for i in range(3):
-                        if field_border_segments[i - k] == [0, 119, 159, 119]:
-                            field_border_data.pop(i - k)
-                            field_border_segments.pop(i - k)
-                            len_field_border_data -= 1
-                            k += 1
-                    if k == 0:
-                        cross_points_num = 0
-                        a0, b0 = field_border_data[0][0], field_border_data[0][1]
-                        a1, b1 = field_border_data[1][0], field_border_data[1][1]
-                        a2, b2 = field_border_data[2][0], field_border_data[2][1]
-                        if a0 != a1:
-                            cross_point01 = [int((b0 - b1)/(a1 - a0)), int(a0 * (b0 - b1)/(a1 - a0) + b0)]
-                            if 0 <= cross_point01[0] < 160 and 0 <= cross_point01[1] < 120:
-                                cross_points_num += 1
-                            else: cross_point01 = None
-                        else: cross_point01 = None
-                        if a1 != a2:
-                            cross_point12 = [int((b1 - b2)/(a2 - a1)), int(a1 * (b1 - b2)/(a2 - a1) + b1)]
-                            if 0 <= cross_point12[0] < 160 and 0 <= cross_point12[1] < 120:
-                                cross_points_num += 1
-                            else: cross_point12 = None
-                        else: cross_point12 = None
-                        if a0 != a2:
-                            cross_point02 = [int((b0 - b2)/(a2 - a0)), int(a0 * (b0 - b2)/(a2 - a0) + b0)]
-                            if 0 <= cross_point02[0] < 160 and 0 <= cross_point02[1] < 120:
-                                cross_points_num += 1
-                            else: cross_point02 = None
-                        else: cross_point02 = None
-                        if cross_points_num == 3:
-                            field_border_data.pop(2)
-                            field_border_segments.pop(2)
-                            len_field_border_data = 2
-                if len_field_border_data == 2:
-                    k = 0
-                    for i in range(2):
-                        if field_border_segments[i - k] == [0, 119, 159, 119]:
-                            field_border_data.pop(i - k)
-                            field_border_segments.pop(i - k)
-                            len_field_border_data -= 1
-                            k += 1
-                if len_field_border_data == 2:
+                    x = int(- p_b1 / p_a1 + last_y / p_a1)
+                    if 0 <= x <= last_x and len(line) < 4:
+                        line.append(x)
+                        line.append(last_y)
+            if len(line) == 4:
+                field_border_segments.append(line)
+                field_border_data.append([p_a1, p_b1])
+        len_field_border_data = len(field_border_data)
+        if len_field_border_data != 0:
+            if len_field_border_data == 3:
+                k = 0
+                for i in range(3):
+                    if field_border_segments[i - k] == [0, last_y, last_x, last_y]:
+                        field_border_data.pop(i - k)
+                        field_border_segments.pop(i - k)
+                        len_field_border_data -= 1
+                        k += 1
+                if k == 0:
+                    cross_points_num = 0
                     a0, b0 = field_border_data[0][0], field_border_data[0][1]
                     a1, b1 = field_border_data[1][0], field_border_data[1][1]
-                    if round(a0, 2) == 0:
-                        if (a1 > 0 and field_border_segments[0][0] > field_border_segments[1][0]) or\
-                           (a1 < 0 and field_border_segments[0][2] < field_border_segments[1][2]) or\
-                           (field_border_segments[0][0] == 0 and field_border_segments[0][2] == 159) :
-                            field_border_data.pop(1)
-                            field_border_segments.pop(1)
-                for x in range(160):
-                    border_y_candidate = []
-                    for parameter in field_border_data:
-                        border_y_candidate.append(parameter[0] * x + parameter[1])
-                    border_y = max(border_y_candidate)
-                    for y in range(120):
-                        if y < border_y:
-                            img4.set_pixel(x, y, 0)
-            for line in field_border_segments: img.draw_line([line[0] * 2, line[1] * 2, line[2] * 2, line[3] * 2], (255,0,0))
-            img4.zhangSuen()
-            #self.vision.thinning(img4, 120, 160, 100)
-            #print(img4.compressed_for_ide(), end="")
-            #pyb.delay(1000)
-            #point_data = self.glob.line_alloc
-            #data_size = 0
-            #for x in range(160):
-            #    for y in range(120):
-            #        if img4.get_pixel(x,y) > 0:
-            #            if data_size >= 2000: break
-            #            point_data[data_size,0] = x
-            #            point_data[data_size,1] = y
-            #            data_size += 1
-            line_segments = self.vision.detect_line_segments( img4 )
-            line_segments_data = []
-            for line in line_segments:
-                line_new = [line[0]*2, line[1]*2, line[2]*2, line[3]*2]
-                line_segments_data.append(line_new)
-                img.draw_line(line_new, (255,0,0))
-                uprint( 'line_segment = ', line)
-            #print(img.compressed_for_ide(), end="")
-            self.sensor.flush()
-            self.sensor.dealloc_extra_fb()
-            self.sensor.dealloc_extra_fb()
-        else:                                                                   # simulation
-            last_y = self.glob.params['CAMERA_VERTICAL_RESOLUTION'] - 1
-            last_x = self.glob.params['CAMERA_HORIZONTAL_RESOLUTION'] - 1
-            img1 = self.re.Image(img)
-            #self.cv2.imshow('Vision Binary', img1.img)
-            #self.cv2.waitKey(0) & 0xFF
-            img_white = img1.binary(self.vision.TH["white marking"]['th'])              # detect white color areas
-            #img2 = self.cv2.resize(img1.img, (160, 120))
-            #self.cv2.imshow('Vision Binary', img2)
-            #self.cv2.waitKey(0) & 0xFF
-            #img2r = self.re.Image(img2)
-            green_mask = img1.binary(self.vision.TH["green field"]['th'])             # detect green color areas
-            #self.cv2.imshow('Vision Binary', green_mask)
-            #self.cv2.waitKey(0) & 0xFF
-            line_segments_data = self.vision.detect_line_segments( green_mask, rank_threshold = 8,
-                                        line_num_limit = 3, upper_lines = True )
-            point_data = None
-            field_border_data = []
-            field_border_segments = []
-            for line_segment in line_segments_data:
-                rho, theta = self.convert_to_line_vector(line_segment[0], line_segment[1],
-                                                    line_segment[2], line_segment[3])
-                p_a1, p_b1 = 0, int(rho)
-                if theta != 0:
-                    p_a1 = -1 / math.tan(theta)
-                    p_b1 = rho/math.sin(theta)
-                line = []
-                if theta == 0: line = [int(rho),0,int(rho), last_y]
-                else:
-                    y = int(p_b1)
-                    if 0 <= y <= last_y :
-                        line.append(0)
-                        line.append(y)
-                    y = int(last_x * p_a1 + p_b1)
-                    if 0 <= y <= last_y :
-                        line.append(last_x)
-                        line.append(y)
-                    if math.cos(theta) != 0:
-                        x = int(- p_b1 / p_a1)
-                        if 0 <= x <= last_x and len(line) < 4:
-                            line.append(x)
-                            line.append(0)
-                        x = int(- p_b1 / p_a1 + last_y / p_a1)
-                        if 0 <= x <= last_x and len(line) < 4:
-                            line.append(x)
-                            line.append(last_y)
-                #print('line = ', line)
-                if len(line) == 4:
-                    field_border_segments.append(line)
-                    field_border_data.append([p_a1, p_b1])
-            len_field_border_data = len(field_border_data)
-            if len_field_border_data != 0:
-                if len_field_border_data == 3:
-                    k = 0
-                    for i in range(3):
-                        if field_border_segments[i - k] == [0, last_y, last_x, last_y]:
-                            field_border_data.pop(i - k)
-                            field_border_segments.pop(i - k)
-                            len_field_border_data -= 1
-                            k += 1
-                    if k == 0:
-                        cross_points_num = 0
-                        a0, b0 = field_border_data[0][0], field_border_data[0][1]
-                        a1, b1 = field_border_data[1][0], field_border_data[1][1]
-                        a2, b2 = field_border_data[2][0], field_border_data[2][1]
-                        if a0 != a1:
-                            cross_point01 = [int((b0 - b1)/(a1 - a0)), int(a0 * (b0 - b1)/(a1 - a0) + b0)]
-                            if 0 <= cross_point01[0] <= last_x and 0 <= cross_point01[1] <= last_y:
-                                cross_points_num += 1
-                            else: cross_point01 = None
-                        else: cross_point01 = None
-                        if a1 != a2:
-                            cross_point12 = [int((b1 - b2)/(a2 - a1)), int(a1 * (b1 - b2)/(a2 - a1) + b1)]
-                            if 0 <= cross_point12[0] <= last_x and 0 <= cross_point12[1] <= last_y:
-                                cross_points_num += 1
-                            else: cross_point12 = None
-                        else: cross_point12 = None
-                        if a0 != a2:
-                            cross_point02 = [int((b0 - b2)/(a2 - a0)), int(a0 * (b0 - b2)/(a2 - a0) + b0)]
-                            if 0 <= cross_point02[0] <= last_x and 0 <= cross_point02[1] <= last_y:
-                                cross_points_num += 1
-                            else: cross_point02 = None
-                        else: cross_point02 = None
-                        if cross_points_num == 3:
-                            field_border_data.pop(2)
-                            field_border_segments.pop(2)
-                            len_field_border_data = 2
-                if len_field_border_data == 2:
-                    k = 0
-                    for i in range(2):
-                        if field_border_segments[i - k] == [0, last_y, last_x, last_y]:
-                            field_border_data.pop(i - k)
-                            field_border_segments.pop(i - k)
-                            len_field_border_data -= 1
-                            k += 1
-                if len_field_border_data == 2:
-                    a0, b0 = field_border_data[0][0], field_border_data[0][1]
-                    a1, b1 = field_border_data[1][0], field_border_data[1][1]
-                    if round(a0, 2) == 0:
-                        if (a1 > 0 and field_border_segments[0][0] > field_border_segments[1][0]) or\
-                           (a1 < 0 and field_border_segments[0][2] < field_border_segments[1][2]) or\
-                           (field_border_segments[0][0] == 0 and field_border_segments[0][2] == last_x) :
-                            field_border_data.pop(1)
-                            field_border_segments.pop(1)
+                    a2, b2 = field_border_data[2][0], field_border_data[2][1]
+                    if a0 != a1:
+                        cross_point01 = [int((b0 - b1)/(a1 - a0)), int(a0 * (b0 - b1)/(a1 - a0) + b0)]
+                        if 0 <= cross_point01[0] <= last_x and 0 <= cross_point01[1] <= last_y:
+                            cross_points_num += 1
+                    if a1 != a2:
+                        cross_point12 = [int((b1 - b2)/(a2 - a1)), int(a1 * (b1 - b2)/(a2 - a1) + b1)]
+                        if 0 <= cross_point12[0] <= last_x and 0 <= cross_point12[1] <= last_y:
+                            cross_points_num += 1
+                    if a0 != a2:
+                        cross_point02 = [int((b0 - b2)/(a2 - a0)), int(a0 * (b0 - b2)/(a2 - a0) + b0)]
+                        if 0 <= cross_point02[0] <= last_x and 0 <= cross_point02[1] <= last_y:
+                            cross_points_num += 1
+                    if cross_points_num == 3:
+                        field_border_data.pop(2)
+                        field_border_segments.pop(2)
+                        len_field_border_data = 2
+            if len_field_border_data == 2:
+                k = 0
+                for i in range(2):
+                    if field_border_segments[i - k] == [0, last_y, last_x, last_y]:
+                        field_border_data.pop(i - k)
+                        field_border_segments.pop(i - k)
+                        len_field_border_data -= 1
+                        k += 1
+            if len_field_border_data == 2:
+                a0, b0 = field_border_data[0][0], field_border_data[0][1]
+                a1, b1 = field_border_data[1][0], field_border_data[1][1]
+                if round(a0, 2) == 0:
+                    if (a1 > 0 and field_border_segments[0][0] > field_border_segments[1][0]) or\
+                       (a1 < 0 and field_border_segments[0][2] < field_border_segments[1][2]) or\
+                       (field_border_segments[0][0] == 0 and field_border_segments[0][2] == last_x):
+                        field_border_data.pop(1)
+                        field_border_segments.pop(1)
 
-                for x in range(self.last_x +1):
-                    border_y_candidate = []
-                    for parameter in field_border_data:
-                        border_y_candidate.append(parameter[0] * x + parameter[1] * 2)
-                    border_y = max(border_y_candidate)
-                    for y in range(self.last_y + 1):
-                        if y < border_y:
-                            img_white[y][x] = [0,0,0]
-                        else: break
-            img_w_g = self.copy.deepcopy(img_white)
-            #for x in range(320):                                                #| set to black area over green field
-            #    for y in range (240):                                           #|
-            #        if green_mask[y][x].all() == 0: img_w_g[y][x] = [0,0,0]     #|
-            #        else: break                                                 #|
-            #self.cv2.imshow('Vision Binary', img_w_g)
-            #self.cv2.waitKey(0) & 0xFF
-            kernel = self.np.ones((5,5), self.np.uint8)
-            img_w_g = self.cv2.dilate(img_w_g,kernel,iterations = 1)
-            img_w_g = self.cv2.GaussianBlur(img_w_g,(5,5),5)
-            #img_w_g = self.cv2.dilate(img_w_g,kernel,iterations = 1)
-            #img_w_g = self.cv2.erode(img_w_g,kernel,iterations = 2)
-            #img_w_g = self.cv2.dilate(img_w_g,kernel,iterations = 1)
-            img_w_g= self.cv2.ximgproc.thinning(self.cv2.cvtColor(img_w_g, self.cv2.COLOR_BGR2GRAY))
-            img3  = self.re.Image(img_w_g)
-            lines = img3.find_line_segments()                           # raw line segments are detected in image
-            line_segments_data =[]
-            for j in range(len(lines)):
-                img1.draw_line(lines[j])
-                line_segments_data.append(lines[j].line())
-            #self.cv2.imshow('Vision Binary', img1.img)
-            #self.cv2.waitKey(0) & 0xFF
+            for x in range(self.last_x +1):
+                border_y_candidate = []
+                for parameter in field_border_data:
+                    border_y_candidate.append(parameter[0] * x + parameter[1] * 2)
+                border_y = max(border_y_candidate)
+                for y in range(self.last_y + 1):
+                    if y < border_y:
+                        img_white[y][x] = 0
+                    else:
+                        break
+        img_w_g = img_white.copy()
+        kernel = self.np.ones((5,5), self.np.uint8)
+        img_w_g = self.cv2.dilate(img_w_g,kernel,iterations = 1)
+        img_w_g = self.cv2.GaussianBlur(img_w_g,(5,5),5)
+        img_w_g= self.cv2.ximgproc.thinning(img_w_g)
+        img3  = self.re.Image(img_w_g, copy=False)
+        lines = img3.find_line_segments()
+        line_segments_data =[]
+        for j in range(len(lines)):
+            img1.draw_line(lines[j])
+            line_segments_data.append(lines[j].line())
 
         #self.floor_lines = []
         self.field_border_data = field_border_data
@@ -1308,60 +1067,35 @@ class Local():
         return
 
     def detect_penalty_marks(self, img):
-        if self.glob.SIMULATION == 2 :
-            img1 = img
-        else:
-            img1 = self.re.Image(img)
-            labimg = self.cv2.cvtColor (img, self.cv2.COLOR_BGR2LAB)
+        img1 = self.re.Image(img)
+        labimg = img1.lab()
         penalty_marks_candidate = []
-        #if self.glob.SIMULATION == 2 :
         thresholds =  [self.vision.TH['white marking']['th']]
-        #else: thresholds =  self.vision.TH['white marking']['th']
         for blob in img1.find_blobs(thresholds, pixels_threshold=self.vision.TH['white marking']['pixel'],
                                    area_threshold=self.vision.TH['white marking']['area'], merge=True):
             if blob.x() < 5 or blob.y() < 5 or blob.x() + blob.w() > (self.glob.params["CAMERA_HORIZONTAL_RESOLUTION"] -6) or blob.y() + blob.h() > (self.glob.params["CAMERA_VERTICAL_RESOLUTION"]-6) : continue
             n = 0
             per_R, per_G, per_B = 0.0,0.0,0.0
-            if self.glob.SIMULATION == 2 :
-                for x in range((blob.x()-5), (blob.x()+blob.w()+5)):
-                    a=self.image.rgb_to_lab(img1.get_pixel(x , blob.y()-5))
-                    b=self.image.rgb_to_lab(img1.get_pixel(x , blob.y()+ blob.h()+ 5))
-                    per_R += a[0] + b[0]
-                    per_G += a[1] + b[1]
-                    per_B += a[2] + b[2]
-                    n += 2
-                for y in range((blob.y() - 5), (blob.y()+ blob.h()+ 5)):
-                    a=self.image.rgb_to_lab(img1.get_pixel(blob.x()-5 , y))
-                    b=self.image.rgb_to_lab(img1.get_pixel(blob.x()+ blob.w()+ 5, y))
-                    per_R += a[0] + b[0]
-                    per_G += a[1] + b[1]
-                    per_B += a[2] + b[2]
-                    n += 2
-                per = [per_R/n, per_G/n, per_B/n]
-                is_green = (self.vision.TH['green field']['th'][0] < per[0] < self.vision.TH['green field']['th'][1]) and \
-                           (self.vision.TH['green field']['th'][2] < per[1] < self.vision.TH['green field']['th'][3]) and \
-                           (self.vision.TH['green field']['th'][4] < per[2] < self.vision.TH['green field']['th'][5])
-            else:
-                for x in range((blob.x()-5), (blob.x()+blob.w()+5)):
-                    per_R += labimg[blob.y()-5][x][0]
-                    per_G += labimg[blob.y()-5][x][1]
-                    per_B += labimg[blob.y()-5][x][2]
-                    per_R +=  labimg[blob.y()+ blob.h()+ 5][x][0]
-                    per_G +=  labimg[blob.y()+ blob.h()+ 5][x][1]
-                    per_B +=  labimg[blob.y()+ blob.h()+ 5][x][2]
-                    n += 2
-                for y in range((blob.y() - 5), (blob.y()+ blob.h()+ 5)):
-                    per_R += labimg[y][blob.x()-5][0]
-                    per_G += labimg[y][blob.x()-5][1]
-                    per_B += labimg[y][blob.x()-5][2]
-                    per_R +=  labimg[y][blob.x()+ blob.w()+ 5][0]
-                    per_G +=  labimg[y][blob.x()+ blob.w()+ 5][1]
-                    per_B +=  labimg[y][blob.x()+ blob.w()+ 5][2]
-                    n += 2
-                per = [per_R/n, per_G/n, per_B/n]
-                is_green = (self.vision.TH['green field']['th'][0] < per[0]/ 2.55 <  self.vision.TH['green field']['th'][1])\
-                       and (self.vision.TH['green field']['th'][2] < per[1]- 128 <  self.vision.TH['green field']['th'][3])\
-                       and (self.vision.TH['green field']['th'][4] < per[2]- 128 <  self.vision.TH['green field']['th'][5])
+            for x in range((blob.x()-5), (blob.x()+blob.w()+5)):
+                per_R += labimg[blob.y()-5][x][0]
+                per_G += labimg[blob.y()-5][x][1]
+                per_B += labimg[blob.y()-5][x][2]
+                per_R +=  labimg[blob.y()+ blob.h()+ 5][x][0]
+                per_G +=  labimg[blob.y()+ blob.h()+ 5][x][1]
+                per_B +=  labimg[blob.y()+ blob.h()+ 5][x][2]
+                n += 2
+            for y in range((blob.y() - 5), (blob.y()+ blob.h()+ 5)):
+                per_R += labimg[y][blob.x()-5][0]
+                per_G += labimg[y][blob.x()-5][1]
+                per_B += labimg[y][blob.x()-5][2]
+                per_R +=  labimg[y][blob.x()+ blob.w()+ 5][0]
+                per_G +=  labimg[y][blob.x()+ blob.w()+ 5][1]
+                per_B +=  labimg[y][blob.x()+ blob.w()+ 5][2]
+                n += 2
+            per = [per_R/n, per_G/n, per_B/n]
+            is_green = (self.vision.TH['green field']['th'][0] < per[0]/ 2.55 <  self.vision.TH['green field']['th'][1])\
+                   and (self.vision.TH['green field']['th'][2] < per[1]- 128 <  self.vision.TH['green field']['th'][3])\
+                   and (self.vision.TH['green field']['th'][4] < per[2]- 128 <  self.vision.TH['green field']['th'][5])
             if is_green == True: penalty_marks_candidate.append(blob)
         penalty_marks = []
         for i in range(len(penalty_marks_candidate)):
@@ -1405,11 +1139,7 @@ class Local():
         self.penalty_list.clear()
 
     def detect_obstacles(self, img):
-        if self.glob.SIMULATION == 2 :
-            if abs(self.motion.neck_pan) == 2667 and self.motion.neck_tilt == self.motion.neck_play_pose -1400: return
-            img1 = img
-        else:
-            img1 = self.re.Image(img)
+        img1 = self.re.Image(img)
         #green_mask = img1.binary(self.vision.TH["green field"]['th'])             # detect green color areas
         if len(self.field_border_data) != 0:
             for x in range(self.last_x +1):
@@ -1417,74 +1147,61 @@ class Local():
                 for parameter in self.field_border_data:
                     border_y_candidate.append(parameter[0] * x + parameter[1] * 2)
                 border_y = max(border_y_candidate)
-                if self.glob.SIMULATION == 2 :
-                    for y in range(240):
-                        if y < border_y:
-                            img1.set_pixel(x,y,(0,0,0))
-                else:
-                    for y in range(self.last_y + 1):
-                        if y < border_y:
-                            img1.img[y][x] = [0,0,0]
-                    else: break
+                for y in range(self.last_y + 1):
+                    if y < border_y:
+                        img1.img[y][x] = [0,0,0]
+                    else:
+                        break
         thresholds =  [self.vision.TH['orange ball']['th'],
                        self.vision.TH['blue posts']['th'],
                        self.vision.TH['yellow posts']['th'],
                        self.vision.TH['green field']['th'],
                        self.vision.TH['white marking']['th'],
                        [0,0,0,0,0,0]]
-        if self.glob.SIMULATION == 2 :
-            roi1 = (0,0,320,240)
-            if (abs(self.motion.neck_pan) == 2667 and self.motion.neck_tilt == self.motion.neck_play_pose -700) or\
-               (abs(self.motion.neck_pan) == 1333 and self.motion.neck_tilt == self.motion.neck_play_pose -1400):
-                roi1 = (0,0,320,160)
-            blobs = img1.find_blobs(thresholds, roi = roi1, invert = True, pixels_threshold=self.vision.TH['blue posts']['pixel'],
-                                   area_threshold=self.vision.TH['blue posts']['area'], merge=True)
-
-        else:
-            if self.motion.neck_pan == 0 and self.motion.neck_tilt == self.motion.neck_play_pose -1400:
-                img1.img[223:][:] = [0,0,0]
-                for i in range(208,223):
-                    img1.img[i][80:235] = [0,0,0]
-            if self.motion.neck_pan == -1333 and self.motion.neck_tilt == self.motion.neck_play_pose -1400:
-                for i in range(92,240):
-                    img1.img[i][:135] = [0,0,0]
-                for i in range(127,240):
-                    img1.img[i][135:i-127+135] = [0,0,0]
-            if self.motion.neck_pan == -1333 and self.motion.neck_tilt == self.motion.neck_play_pose -700:
-                for i in range(170,240):
-                    img1.img[i][:math.ceil((i-169)/70*50)] = [0,0,0]
-            if self.motion.neck_pan == 1333 and self.motion.neck_tilt == self.motion.neck_play_pose -700:
-                for i in range(170,240):
-                    img1.img[i][-math.ceil((i-169)/70*50):] = [0,0,0]
-            if self.motion.neck_pan == 1333 and self.motion.neck_tilt == self.motion.neck_play_pose -1400:
-                for i in range(92,240):
-                    img1.img[i][-135:] = [0,0,0]
-                for i in range(127,240):
-                    img1.img[i][-(i-127+140):-135] = [0,0,0]
-            if self.motion.neck_pan == 2667 and self.motion.neck_tilt == self.motion.neck_play_pose -1400:
-                img1.img[185:][:] = [0,0,0]
-                for i in range(240):
-                    img1.img[i][50:275] = [0,0,0]
-                    if i > 110:
-                        img1.img[i][275:] = [0,0,0]
-            if self.motion.neck_pan == 2667 and self.motion.neck_tilt == self.motion.neck_play_pose -700:
-                for i in range(120,240):
-                    img1.img[i][70:245] = [0,0,0]
-                    if i > 224:
-                        img1.img[i][245:] = [0,0,0]
-            if self.motion.neck_pan == -2667 and self.motion.neck_tilt == self.motion.neck_play_pose -1400:
-                img1.img[185:][:] = [0,0,0]
-                for i in range(240):
-                    img1.img[i][40:270] = [0,0,0]
-                    if i > 110:
-                        img1.img[i][:40] = [0,0,0]
-            if self.motion.neck_pan == -2667 and self.motion.neck_tilt == self.motion.neck_play_pose -700:
-                for i in range(120,240):
-                    img1.img[i][75:250] = [0,0,0]
-                    if i > 224:
-                        img1.img[i][:75] = [0,0,0]
-            blobs = img1.find_blobs(thresholds, pixels_threshold=self.vision.TH['blue posts']['pixel'],
-                                   area_threshold=self.vision.TH['blue posts']['area'], merge=True, invert = True)
+        if self.motion.neck_pan == 0 and self.motion.neck_tilt == self.motion.neck_play_pose -1400:
+            img1.img[223:][:] = [0,0,0]
+            for i in range(208,223):
+                img1.img[i][80:235] = [0,0,0]
+        if self.motion.neck_pan == -1333 and self.motion.neck_tilt == self.motion.neck_play_pose -1400:
+            for i in range(92,240):
+                img1.img[i][:135] = [0,0,0]
+            for i in range(127,240):
+                img1.img[i][135:i-127+135] = [0,0,0]
+        if self.motion.neck_pan == -1333 and self.motion.neck_tilt == self.motion.neck_play_pose -700:
+            for i in range(170,240):
+                img1.img[i][:math.ceil((i-169)/70*50)] = [0,0,0]
+        if self.motion.neck_pan == 1333 and self.motion.neck_tilt == self.motion.neck_play_pose -700:
+            for i in range(170,240):
+                img1.img[i][-math.ceil((i-169)/70*50):] = [0,0,0]
+        if self.motion.neck_pan == 1333 and self.motion.neck_tilt == self.motion.neck_play_pose -1400:
+            for i in range(92,240):
+                img1.img[i][-135:] = [0,0,0]
+            for i in range(127,240):
+                img1.img[i][-(i-127+140):-135] = [0,0,0]
+        if self.motion.neck_pan == 2667 and self.motion.neck_tilt == self.motion.neck_play_pose -1400:
+            img1.img[185:][:] = [0,0,0]
+            for i in range(240):
+                img1.img[i][50:275] = [0,0,0]
+                if i > 110:
+                    img1.img[i][275:] = [0,0,0]
+        if self.motion.neck_pan == 2667 and self.motion.neck_tilt == self.motion.neck_play_pose -700:
+            for i in range(120,240):
+                img1.img[i][70:245] = [0,0,0]
+                if i > 224:
+                    img1.img[i][245:] = [0,0,0]
+        if self.motion.neck_pan == -2667 and self.motion.neck_tilt == self.motion.neck_play_pose -1400:
+            img1.img[185:][:] = [0,0,0]
+            for i in range(240):
+                img1.img[i][40:270] = [0,0,0]
+                if i > 110:
+                    img1.img[i][:40] = [0,0,0]
+        if self.motion.neck_pan == -2667 and self.motion.neck_tilt == self.motion.neck_play_pose -700:
+            for i in range(120,240):
+                img1.img[i][75:250] = [0,0,0]
+                if i > 224:
+                    img1.img[i][:75] = [0,0,0]
+        blobs = img1.find_blobs(thresholds, pixels_threshold=self.vision.TH['blue posts']['pixel'],
+                               area_threshold=self.vision.TH['blue posts']['area'], merge=True, invert = True)
         obstacle_blobs = []
         for blob in blobs:
             #img1.draw_rectangle(blob.rect())
@@ -1501,12 +1218,8 @@ class Local():
             floor_y = floor_yc * (dist + obstacle_diameter/2)/dist * 1.05
             self.glob.obstacles.append([floor_x, floor_y, obstacle_diameter])
         if len(merged_blobs) >0 : img1.draw_rectangle(merged_blobs[0].rect(), color = (0,255,255))
-        if self.glob.SIMULATION == 2 :
-            print(img1.compressed_for_ide(), end="")
-        else:
-            self.cv2.imshow('Obstacle View', img1.img)
-            self.cv2.waitKey(10) & 0xFF
-            #self.cv2.waitKey(0) & 0xFF
+        self.glob.display.show('Obstacle View', img1.img)
+        #self.cv2.waitKey(0) & 0xFF
 
     def merge_blobs(self, blobs_, th=2):
         blobs = []
@@ -1584,12 +1297,3 @@ class Local():
 
 if __name__=="__main__":
     print('This is not main module!')
-
-
-
-
-
-
-
-
-
