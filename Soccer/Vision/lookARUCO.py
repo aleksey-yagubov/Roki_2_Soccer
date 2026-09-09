@@ -3,15 +3,14 @@ import time
 import numpy as np
 from Soccer.Vision.led_blink import Led
 import math
-import yaml
-from yaml.loader import SafeLoader
+import json
 
 undistortPointMap = np.load("Soccer/Vision/undistortPointMap_x_y.npy")
 P_matrix = np.load("Soccer/Vision/Camera_calibration_P.npy")
 undistort_cx, undistort_cy = P_matrix[0,2], P_matrix[1,2]
 focal_length_horizontal = P_matrix[0,0]
-with open("Soccer/Vision/calibration_matrix.yaml", "r")as f:
-    data = yaml.load(f, Loader=SafeLoader)
+with open("Soccer/Vision/calibration_matrix.json", "r") as f:
+    data = json.load(f)
 mtx = np.asarray(data['camera_matrix'])
 dist = np.asarray(data['dist_coeff'])
 markerSizeInCM = 16
